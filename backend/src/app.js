@@ -14,7 +14,7 @@ const { apiLimiter } = require("./middlewares/rateLimit.middleware");
 const { notFoundHandler, errorHandler } = require("./middlewares/error.middleware");
 const { env } = require("./config/env");
 const { isDbConnected } = require("./db/db");
-const notificationRoutes = require("./routes/notification.routes");
+const notificationRoutes = require("./routes/notification.route");
 
 
 const app = express();
