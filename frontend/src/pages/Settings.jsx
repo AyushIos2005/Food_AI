@@ -1,15 +1,25 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, LogOut, Lock, MessageSquare, Flag, Mail } from "lucide-react";
+import { ChevronRight, LogOut, Lock, MessageSquare, Flag, Mail, Sun, Moon, Monitor, Languages } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { changePassword } from "../api/auth";
 import { submitComplaint, contactDeveloper, giveFeedback } from "../api/feedback";
 import { useToast } from "../context/ToastContext";
+import { useTheme } from "../context/ThemeContext";
+import { useLanguage, SUPPORTED_LANGUAGES } from "../context/LanguageContext";
+
+const THEME_OPTIONS = [
+  { value: "light", icon: Sun, key: "theme_light", label: "Light" },
+  { value: "dark", icon: Moon, key: "theme_dark", label: "Dark" },
+  { value: "system", icon: Monitor, key: "theme_system", label: "System" },
+];
 
 export default function Settings() {
   const { logout, user } = useAuth();
   const navigate = useNavigate();
   const toast = useToast();
+  const { theme, setTheme } = useTheme();
+  const { language, setLanguage, t } = useLanguage();
   const [open, setOpen] = useState(null);
 
   const [pwForm, setPwForm] = useState({ oldPassword: "", newPassword: "", confirmNewPassword: "" });
@@ -71,10 +81,10 @@ export default function Settings() {
   };
 
   const items = [
-    { key: "password", label: "Change Password", icon: Lock },
-    { key: "feedback", label: "Give Feedback", icon: MessageSquare },
-    { key: "complaint", label: "Report a Complaint", icon: Flag },
-    { key: "contact", label: "Contact Developer", icon: Mail },
+    { key: "password", label: t("settings_password", "Change Password"), icon: Lock },
+    { key: "feedback", label: t("settings_feedback", "Give Feedback"), icon: MessageSquare },
+    { key: "complaint", label: t("settings_complaint", "Report a Complaint"), icon: Flag },
+    { key: "contact", label: t("settings_contact", "Contact Developer"), icon: Mail },
   ];
 
   return (
@@ -86,6 +96,49 @@ export default function Settings() {
         <div>
           <p className="font-display text-lg text-ink">{user?.name || "Foodie"}</p>
           <p className="text-[13px] text-ink-soft">@{user?.username}</p>
+        </div>
+      </div>
+
+      <div className="card p-5 mb-6">
+        <p className="text-[13px] font-bold text-ink mb-3">{t("settings_preferences", "Preferences")}</p>
+
+        <p className="text-[12px] text-ink-soft mb-2">{t("settings_theme", "Theme")}</p>
+        <div className="grid grid-cols-3 gap-2 mb-4">
+          {THEME_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setTheme(opt.value)}
+              className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl border text-[12px] font-medium transition ${
+                theme === opt.value
+                  ? "border-orange-500 bg-orange-50 text-orange-600"
+                  : "border-(--color-line) text-ink-soft hover:border-orange-200"
+              }`}
+            >
+              <opt.icon size={17} />
+              {t(opt.key, opt.label)}
+            </button>
+          ))}
+        </div>
+
+        <p className="text-[12px] text-ink-soft mb-2 flex items-center gap-1.5">
+          <Languages size={13} /> {t("settings_language", "Language")}
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {SUPPORTED_LANGUAGES.map((lang) => (
+            <button
+              key={lang.code}
+              type="button"
+              onClick={() => setLanguage(lang.code)}
+              className={`py-3 rounded-2xl border text-[13px] font-medium transition ${
+                language === lang.code
+                  ? "border-orange-500 bg-orange-50 text-orange-600"
+                  : "border-(--color-line) text-ink-soft hover:border-orange-200"
+              }`}
+            >
+              {lang.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -154,8 +207,8 @@ export default function Settings() {
       ))}
       </div>
 
-      <button onClick={doLogout} className="w-full mt-4 flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-red-200 text-red-500 text-[14px] font-medium bg-white">
-        <LogOut size={16} /> Logout
+      <button onClick={doLogout} className="w-full mt-4 flex items-center justify-center gap-2 py-3.5 rounded-2xl border border-red-200 text-red-500 text-[14px] font-medium bg-(--color-surface)">
+        <LogOut size={16} /> {t("nav_logout", "Logout")}
       </button>
     </div>
   );

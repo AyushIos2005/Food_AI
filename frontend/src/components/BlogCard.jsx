@@ -67,19 +67,33 @@ export default function BlogCard({ blog, onLike, onSave, onShare, onOpenComments
   );
 }
 
-export function AiRecipeCard({ recipe, onOpen }) {
+export function AiRecipeCard({ recipe, onOpen, onDelete }) {
   return (
-    <button onClick={onOpen} className="card p-4 text-left hover:-translate-y-0.5 transition w-full">
-      <p className="text-[11px] tracking-[0.16em] text-orange-600 font-semibold">AI RECIPE</p>
-      <h3 className="font-display text-xl mt-1 text-ink">
-        {recipe.recipeName || recipe.newFoodName || "Untitled recipe"}
-      </h3>
-      <p className="text-[13px] text-ink-soft mt-1 line-clamp-2">{recipe.description}</p>
-      <div className="flex gap-3 mt-3 text-[12px] text-ink-soft">
-        {recipe.servings && <span>{recipe.servings} servings</span>}
-        {recipe.preparationTime && <span>{recipe.preparationTime}</span>}
-        {recipe.proteinPerServing && <span>{recipe.proteinPerServing} protein</span>}
-      </div>
-    </button>
+    <div className="card p-4 text-left hover:-translate-y-0.5 transition w-full relative group">
+      <button onClick={onOpen} className="w-full text-left">
+        <p className="text-[11px] tracking-[0.16em] text-orange-600 font-semibold">AI RECIPE</p>
+        <h3 className="font-display text-xl mt-1 text-ink pr-8">
+          {recipe.recipeName || recipe.newFoodName || "Untitled recipe"}
+        </h3>
+        <p className="text-[13px] text-ink-soft mt-1 line-clamp-2">{recipe.description}</p>
+        <div className="flex gap-3 mt-3 text-[12px] text-ink-soft">
+          {recipe.servings && <span>{recipe.servings} servings</span>}
+          {recipe.preparationTime && <span>{recipe.preparationTime}</span>}
+          {recipe.proteinPerServing && <span>{recipe.proteinPerServing} protein</span>}
+        </div>
+      </button>
+      {onDelete && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          aria-label="Delete recipe"
+          className="absolute top-3.5 right-3.5 w-7 h-7 rounded-full bg-white border border-(--color-line) flex items-center justify-center text-ink-soft/60 hover:text-red-500 hover:border-red-200 opacity-0 group-hover:opacity-100 focus:opacity-100 transition sm:opacity-100"
+        >
+          ×
+        </button>
+      )}
+    </div>
   );
 }

@@ -1,36 +1,41 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChefHat, ChevronRight, Sparkles, Wand2 } from "lucide-react";
-import { getGeneratedRecipes, getRecreatedFoods } from "../api/ai";
+import { getAiHistory, deleteAiHistoryItem } from "../api/ai";
 import { AiRecipeCard } from "../components/BlogCard";
 import { EmptyState, LoadingState } from "../components/States";
+import { useToast } from "../context/ToastContext";
 
 const RECIPE_KEY = "foodai_last_recipe";
 
 export default function AiHub() {
-  const [recipes, setRecipes] = useState([]);
+  const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const toast = useToast();
 
   useEffect(() => {
-    Promise.allSettled([getGeneratedRecipes(), getRecreatedFoods()])
-      .then((results) => {
-        const list = [];
-        results.forEach((r) => {
-          if (r.status === "fulfilled") {
-            const payload = r.value?.data || r.value?.recipes || r.value;
-            if (Array.isArray(payload)) list.push(...payload);
-            else if (payload?.recipe) list.push(payload.recipe);
-          }
-        });
-        setRecipes(list);
-      })
+    getAiHistory()
+      .then((res) => setHistory(Array.isArray(res?.data) ? res.data : []))
+      .catch(() => setHistory([]))
       .finally(() => setLoading(false));
   }, []);
 
   const openRecipe = (recipe) => {
     sessionStorage.setItem(RECIPE_KEY, JSON.stringify(recipe));
     navigate("/ai/result");
+  };
+
+  const removeItem = async (id) => {
+    const prev = history;
+    setHistory((h) => h.filter((item) => item._id !== id));
+    try {
+      await deleteAiHistoryItem(id);
+      toast?.success("Recipe removed");
+    } catch (err) {
+      setHistory(prev);
+      toast?.error(err.message || "Failed to remove recipe");
+    }
   };
 
   return (
@@ -86,16 +91,21 @@ export default function AiHub() {
       <h3 className="font-display text-xl mb-4">Your generated recipes</h3>
       {loading ? (
         <LoadingState label="Loading AI recipes..." />
-      ) : recipes.length === 0 ? (
+      ) : history.length === 0 ? (
         <EmptyState
           title="No AI recipes yet"
           description="Generate your first protein-smart recipe."
           action={<button onClick={() => navigate("/ai/create")} className="btn-primary mt-3">Create recipe</button>}
         />
       ) : (
-        <div className="grid md:grid-cols-2 gap-4">
-          {recipes.map((r, i) => (
-            <AiRecipeCard key={r._id || i} recipe={r.recipe || r} onOpen={() => openRecipe(r.recipe || r)} />
+        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {history.map((item) => (
+            <AiRecipeCard
+              key={item._id}
+              recipe={item.recipe || item}
+              onOpen={() => openRecipe(item.recipe || item)}
+              onDelete={() => removeItem(item._id)}
+            />
           ))}
         </div>
       )}

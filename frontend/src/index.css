@@ -17,9 +17,29 @@
   --color-dark-2: #211A14;
   --color-line: #ECE6DC;
   --color-sage: #3D6B4F;
+  --color-surface: #FFFFFF;
+  --color-surface-soft: #FBFAF8;
+}
+
+/* Dark theme — same token names, flipped values. Toggled via a `.dark`
+   class on <html> (see ThemeContext). Anything built on these variables
+   (body bg, .card, .input-field, .btn-outline, TopBar, nav, etc.) picks
+   this up automatically without per-component dark: classes. */
+.dark {
+  --color-cream: #15110C;
+  --color-cream-2: #1C1611;
+  --color-ink: #F3EEE6;
+  --color-ink-soft: #B3A99C;
+  --color-orange-50: #2E1D10;
+  --color-orange-100: #3B2513;
+  --color-line: #33291D;
+  --color-surface: #201A14;
+  --color-surface-soft: #241D16;
 }
 
 html, body, #root { height: 100%; }
+
+html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
@@ -27,6 +47,7 @@ body {
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  transition: background-color .25s ease, color .25s ease;
 }
 
 #root {
@@ -37,39 +58,55 @@ body {
 
 * { box-sizing: border-box; }
 
+::selection { background: var(--color-orange-100); color: var(--color-orange-700); }
+
+:focus-visible {
+  outline: 2px solid var(--color-orange-500);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 .no-scrollbar::-webkit-scrollbar { display: none; }
 
 .font-display { font-family: var(--font-display); font-weight: 700; letter-spacing: -0.01em; }
 
+.text-gradient {
+  background: linear-gradient(90deg, var(--color-orange-600), var(--color-orange-500) 60%, #F2934B);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 .btn-primary {
-  background: var(--color-orange-500);
+  background: linear-gradient(135deg, var(--color-orange-500), var(--color-orange-600));
   color: white;
   font-weight: 600;
   border-radius: 16px;
   padding: 14px 20px;
   text-align: center;
-  box-shadow: 0 10px 22px -10px rgba(242, 118, 15, 0.55);
+  box-shadow: 0 10px 24px -10px rgba(242, 118, 15, 0.55);
   transition: transform .15s ease, box-shadow .15s ease, opacity .15s ease, background .15s ease;
 }
-.btn-primary:hover { background: var(--color-orange-600); transform: translateY(-1px); }
-.btn-primary:active { transform: scale(0.98); }
+.btn-primary:hover { box-shadow: 0 14px 28px -10px rgba(242, 118, 15, 0.65); transform: translateY(-1.5px); }
+.btn-primary:active { transform: scale(0.98) translateY(0); }
 .btn-primary:disabled { opacity: 0.55; box-shadow: none; transform: none; }
 
 .btn-outline {
   border: 1.5px solid var(--color-line);
-  background: white;
+  background: var(--color-surface);
   color: var(--color-ink);
   font-weight: 600;
   border-radius: 16px;
   padding: 12px 18px;
-  transition: border-color .15s ease, background .15s ease;
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
 }
-.btn-outline:hover { border-color: var(--color-orange-500); }
+.btn-outline:hover { border-color: var(--color-orange-500); background: var(--color-orange-50); transform: translateY(-1px); }
+.btn-outline:active { transform: translateY(0); }
 
 .input-field {
   width: 100%;
-  background: #FBFAF8;
+  background: var(--color-surface-soft);
   border: 1.5px solid var(--color-line);
   border-radius: 14px;
   padding: 13px 16px;
@@ -79,16 +116,21 @@ body {
   transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
 }
 .input-field:focus {
-  background: white;
+  background: var(--color-surface);
   border-color: var(--color-orange-500);
   box-shadow: 0 0 0 3px var(--color-orange-50);
 }
 
 .card {
-  background: #FFFFFF;
+  background: var(--color-surface);
   border-radius: 22px;
   border: 1px solid var(--color-line);
   box-shadow: 0 8px 24px -16px rgba(29, 27, 25, 0.18);
+  transition: box-shadow .2s ease, border-color .2s ease, background .2s ease;
+}
+.card:hover {
+  box-shadow: 0 16px 34px -14px rgba(29, 27, 25, 0.22);
+  border-color: var(--color-orange-100);
 }
 
 .skeleton {

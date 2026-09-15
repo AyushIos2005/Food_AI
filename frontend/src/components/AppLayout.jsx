@@ -12,36 +12,40 @@ import {
   User,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { useLanguage } from "../context/LanguageContext";
 
-const nav = [
-  { to: "/home", icon: Home, label: "Home" },
-  { to: "/recipes", icon: Search, label: "Explore" },
-  { to: "/ai", icon: Sparkles, label: "AI Hub" },
-  { to: "/community", icon: Users, label: "Community" },
-  { to: "/saved", icon: Bookmark, label: "Saved" },
-  { to: "/profile", icon: User, label: "Profile" },
+const navDefs = [
+  { to: "/home", icon: Home, key: "nav_home", label: "Home" },
+  { to: "/recipes", icon: Search, key: "nav_explore", label: "Explore" },
+  { to: "/ai", icon: Sparkles, key: "nav_ai", label: "AI Hub" },
+  { to: "/community", icon: Users, key: "nav_community", label: "Community" },
+  { to: "/saved", icon: Bookmark, key: "nav_saved", label: "Saved" },
+  { to: "/profile", icon: User, key: "nav_profile", label: "Profile" },
 ];
 
-const titles = {
-  "/home": "Home",
-  "/recipes": "Explore",
-  "/ai": "AI Hub",
-  "/ai/create": "Generate Recipe",
-  "/ai/result": "Your Recipe",
-  "/community": "Community",
-  "/community/create": "Create Post",
-  "/saved": "Saved Recipes",
-  "/profile": "Profile",
-  "/profile/edit": "Edit Profile",
-  "/settings": "Settings",
-  "/notifications": "Notifications",
+const titleKeys = {
+  "/home": "title_home",
+  "/recipes": "title_recipes",
+  "/ai": "title_ai",
+  "/ai/create": "title_ai_create",
+  "/ai/result": "title_ai_result",
+  "/community": "title_community",
+  "/community/create": "title_community_create",
+  "/saved": "title_saved",
+  "/profile": "title_profile",
+  "/profile/edit": "title_profile_edit",
+  "/settings": "title_settings",
+  "/notifications": "title_notifications",
 };
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const title = titles[pathname] || "FoodMenu";
+  const { t } = useLanguage();
+  const nav = navDefs.map((n) => ({ ...n, label: t(n.key, n.label) }));
+  const titleKey = titleKeys[pathname];
+  const title = titleKey ? t(titleKey, "FoodMenu") : t("title_default", "FoodMenu");
 
   const doLogout = async () => {
     await logout();
@@ -85,13 +89,13 @@ export default function AppLayout() {
             onClick={() => navigate("/settings")}
             className="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-[14px] text-white/55 hover:bg-white/5 hover:text-white"
           >
-            <Settings size={18} /> Settings
+            <Settings size={18} /> {t("nav_settings", "Settings")}
           </button>
           <button
             onClick={doLogout}
             className="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl text-[14px] text-red-300/80 hover:bg-white/5"
           >
-            <LogOut size={18} /> Logout
+            <LogOut size={18} /> {t("nav_logout", "Logout")}
           </button>
           <div className="mt-3 flex items-center gap-3 px-2 py-3 rounded-2xl bg-white/5">
             <div className="w-9 h-9 rounded-full bg-orange-500/30 flex items-center justify-center text-sm font-semibold">
@@ -105,7 +109,7 @@ export default function AppLayout() {
         </div>
       </aside>
 
-      <header className="sticky top-0 z-30 backdrop-blur-xl bg-[#F7F1E8]/80 border-b border-(--color-line)">
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-cream/80 border-b border-(--color-line)">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="lg:hidden w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center text-white">
@@ -121,13 +125,20 @@ export default function AppLayout() {
               onClick={() => navigate("/ai/create")}
               className="hidden sm:flex items-center gap-2 px-3.5 py-2 rounded-full bg-orange-500 text-white text-[12px] font-semibold"
             >
-              <Sparkles size={14} /> Generate
+              <Sparkles size={14} /> {t("nav_generate", "Generate")}
             </button>
             <button
               onClick={() => navigate("/notifications")}
-              className="w-10 h-10 rounded-full bg-white border border-(--color-line) flex items-center justify-center"
+              className="w-10 h-10 rounded-full bg-(--color-surface) border border-(--color-line) flex items-center justify-center"
             >
               <Bell size={18} />
+            </button>
+            <button
+              onClick={() => navigate("/settings")}
+              aria-label={t("nav_settings", "Settings")}
+              className="lg:hidden w-10 h-10 rounded-full bg-(--color-surface) border border-(--color-line) flex items-center justify-center"
+            >
+              <Settings size={18} />
             </button>
           </div>
         </div>
@@ -137,7 +148,7 @@ export default function AppLayout() {
         <Outlet />
       </main>
 
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur border-t border-(--color-line) px-2 pt-2 pb-[max(10px,env(safe-area-inset-bottom))] flex items-center justify-between">
+      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-(--color-surface)/95 backdrop-blur border-t border-(--color-line) px-2 pt-2 pb-[max(10px,env(safe-area-inset-bottom))] flex items-center justify-between">
         {nav.map(({ to, icon: Icon, label }) => (
           <NavLink key={to} to={to} className="flex flex-col items-center gap-1 flex-1 py-1">
             {({ isActive }) => (
