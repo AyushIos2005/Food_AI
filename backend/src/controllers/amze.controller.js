@@ -958,13 +958,6 @@ async function UndoMyHistory(req, res) {
 
         }
 
-
-        /*
-        ======================================
-        SEARCH DELETED PROTEIN
-        ======================================
-        */
-
         let history = await amzeModel.findOne({
 
             _id: id,
@@ -977,13 +970,6 @@ async function UndoMyHistory(req, res) {
 
 
         let historyType = "protein_recipe";
-
-
-        /*
-        ======================================
-        SEARCH DELETED RECREATED
-        ======================================
-        */
 
         if (!history) {
 
@@ -1001,14 +987,6 @@ async function UndoMyHistory(req, res) {
             historyType = "recreated_food";
 
         }
-
-
-        /*
-        ======================================
-        NOT FOUND
-        ======================================
-        */
-
         if (!history) {
 
             return res.status(404).json({
@@ -1020,13 +998,6 @@ async function UndoMyHistory(req, res) {
             });
 
         }
-
-
-        /*
-        ======================================
-        RESTORE
-        ======================================
-        */
 
         if (!history.deletedAIsolution) {
 
@@ -1043,13 +1014,6 @@ async function UndoMyHistory(req, res) {
 
         history.recipe =
             history.deletedAIsolution;
-
-
-        /*
-        ======================================
-        CLEAR DELETE DATA
-        ======================================
-        */
 
         history.deletedAIsolution = null;
 

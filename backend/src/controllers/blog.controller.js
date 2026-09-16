@@ -4,9 +4,6 @@ const logger = require("../utils/logger");
 const { getPagination } = require("../utils/pagination");
 const { createNotification } = require("../services/notification.service");
 
-// ======================================================
-// EXTRACT HASHTAGS
-// ======================================================
 function extractHashtags(text) {
 
     const matches = text.match(/#[a-zA-Z0-9_]+/g);
@@ -24,10 +21,6 @@ function extractHashtags(text) {
     ];
 }
 
-
-// ======================================================
-// GET USER ID
-// ======================================================
 function getUserId(req) {
 
     return (
@@ -37,10 +30,6 @@ function getUserId(req) {
     );
 }
 
-
-// ======================================================
-// REQUIRE AUTH (shared guard)
-// ======================================================
 function requireAuth(req, res) {
 
     const userId = getUserId(req);
@@ -57,13 +46,6 @@ function requireAuth(req, res) {
     return userId;
 }
 
-
-// ======================================================
-// PARSE SOCIAL LINKS
-// multipart/form-data sends every non-file field as a string,
-// so socialLinks arrives as a JSON string (if sent at all),
-// not as an array. Handle both cases safely.
-// ======================================================
 function parseSocialLinks(socialLinks) {
 
     if (!socialLinks) {
@@ -85,10 +67,6 @@ function parseSocialLinks(socialLinks) {
             return [];
         }
     }
-
-    // Drop any entry that doesn't have both platform and platformId —
-    // these are required by the schema and would otherwise throw a
-    // ValidationError and abort the whole blog creation.
     return parsedLinks.filter(
         (link) =>
             link &&
@@ -100,9 +78,6 @@ function parseSocialLinks(socialLinks) {
 }
 
 
-// ======================================================
-// CREATE BLOG
-// ======================================================
 async function create_post(req, res) {
 
     try {
@@ -119,7 +94,6 @@ async function create_post(req, res) {
         } = req.body;
 
 
-        // Middleware se media aa raha hai
         const media = req.body.media;
 
 
@@ -139,7 +113,6 @@ async function create_post(req, res) {
         }
 
 
-        // Extract hashtags
         const hashtags = extractHashtags(description);
 
 
