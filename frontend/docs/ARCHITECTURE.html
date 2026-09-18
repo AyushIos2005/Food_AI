@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<title>FoodAI — Backend Architecture</title>
+<style>
+:root{
+  --bg:#F8FAFC; --card:#FFFFFF; --ink:#0F172A; --muted:#64748B;
+  --primary:#064E3B; --secondary:#047857; --accent:#22C55E;
+  --line:#CBD5E1; --warn:#F59E0B; --danger:#EF4444;
+  --chip:#F1F5F9;
+}
+:root:not([data-theme="light"]){}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0B1220; --card:#131C2B; --ink:#E7EDF5; --muted:#94A3B8;
+    --line:#334155; --chip:#1E293B;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0B1220; --card:#131C2B; --ink:#E7EDF5; --muted:#94A3B8;
+  --line:#334155; --chip:#1E293B;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Manrope,ui-sans-serif,system-ui,sans-serif;line-height:1.6;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1120px;margin:0 auto;padding:40px 20px 72px}
+h1,h2,h3{font-family:Fraunces,ui-serif,Georgia,serif;margin:0}
+h1{font-size:clamp(28px,4vw,40px);font-weight:600;letter-spacing:-.02em}
+h2{font-size:22px;font-weight:600;margin:44px 0 14px}
+h3{font-size:16px;font-weight:600;margin:0 0 8px}
+.sub{color:var(--muted);margin:8px 0 0}
+.badge{display:inline-block;background:var(--primary);color:#fff;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:5px 11px;border-radius:999px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px 20px}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+svg{display:block;min-width:900px;max-width:100%;height:auto;margin:0 auto}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;font-size:13px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:7px}
+.dot{width:11px;height:11px;border-radius:3px;display:inline-block}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));margin-top:6px}
+table{width:100%;border-collapse:collapse;font-size:14px;min-width:560px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:700}
+code{background:var(--chip);padding:2px 6px;border-radius:5px;font-size:12.5px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+ul{margin:8px 0 0;padding-left:20px;color:var(--muted);font-size:14px}
+li{margin:4px 0}
+li b{color:var(--ink)}
+.note{border-left:3px solid var(--warn);background:color-mix(in srgb,var(--warn) 9%,transparent);border-radius:0 12px 12px 0;padding:14px 18px;margin-top:14px;font-size:14px}
+.pre{background:var(--chip);border-radius:12px;padding:14px 16px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12.5px;white-space:pre;overflow-x:auto;color:var(--ink);margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<span class="badge">FoodAI · System Design</span>
+<h1>Backend Architecture</h1>
+<p class="sub">Node.js · Express · MongoDB · Socket.IO · Gemini AI — with the React (Vite) frontend that consumes it.</p>
+
+<h2>1 · System overview</h2>
+<div class="card scroll">
+<svg viewBox="0 0 980 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FoodAI system architecture diagram">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--muted)"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--accent)"/>
+    </marker>
+  </defs>
+  <style>
+    .box{fill:var(--card);stroke:var(--line);stroke-width:1.5;rx:12}
+    .t{font-family:Manrope,sans-serif;font-size:12.5px;fill:var(--ink);font-weight:600}
+    .s{font-family:Manrope,sans-serif;font-size:10.5px;fill:var(--muted)}
+    .hd{font-family:Fraunces,serif;font-size:13px;fill:var(--ink);font-weight:600}
+    .ln{stroke:var(--muted);stroke-width:1.4;fill:none;marker-end:url(#a)}
+    .lg{stroke:var(--accent);stroke-width:1.6;fill:none;marker-end:url(#ag);stroke-dasharray:5 4}
+    .zone{fill:none;stroke:var(--line);stroke-width:1.2;stroke-dasharray:6 5;rx:14}
+    .zl{font-family:Manrope,sans-serif;font-size:10px;fill:var(--muted);font-weight:700;letter-spacing:.09em}
+  </style>
+
+  <!-- CLIENT -->
+  <rect class="zone" x="20" y="20" width="240" height="250"/>
+  <text class="zl" x="34" y="42">CLIENT</text>
+  <rect class="box" x="40" y="56" width="200" height="60"/>
+  <text class="hd" x="56" y="80">React SPA (Vite)</text>
+  <text class="s" x="56" y="98">Browser · Tailwind · Router</text>
+  <rect class="box" x="40" y="128" width="200" height="54"/>
+  <text class="t" x="56" y="150">axios instance</text>
+  <text class="s" x="56" y="167">withCredentials: true</text>
+  <rect class="box" x="40" y="194" width="200" height="54"/>
+  <text class="t" x="56" y="216">socket.io-client</text>
+  <text class="s" x="56" y="233">live notifications</text>
+
+  <!-- EDGE -->
+  <rect class="zone" x="296" y="20" width="200" height="250"/>
+  <text class="zl" x="310" y="42">EDGE / MIDDLEWARE</text>
+  <rect class="box" x="312" y="56" width="168" height="44"/>
+  <text class="t" x="326" y="76">helmet</text>
+  <text class="s" x="326" y="91">security headers</text>
+  <rect class="box" x="312" y="110" width="168" height="44"/>
+  <text class="t" x="326" y="130">cors allow-list</text>
+  <text class="s" x="326" y="145">credentials: true</text>
+  <rect class="box" x="312" y="164" width="168" height="44"/>
+  <text class="t" x="326" y="184">sanitize + rate limit</text>
+  <text class="s" x="326" y="199">apiLimiter on /api</text>
+  <rect class="box" x="312" y="218" width="168" height="44"/>
+  <text class="t" x="326" y="238">zod validate</text>
+  <text class="s" x="326" y="253">body · params · query</text>
+
+  <!-- APP -->
+  <rect class="zone" x="532" y="20" width="428" height="366"/>
+  <text class="zl" x="546" y="42">EXPRESS APP · 7 ROUTERS</text>
+
+  <rect class="box" x="548" y="56" width="192" height="46"/>
+  <text class="t" x="562" y="75">/api/auth</text>
+  <text class="s" x="562" y="91">register · login · OTP · follow</text>
+  <rect class="box" x="752" y="56" width="192" height="46"/>
+  <text class="t" x="766" y="75">/api/profile</text>
+  <text class="s" x="766" y="91">CRUD own profile</text>
+
+  <rect class="box" x="548" y="112" width="192" height="46"/>
+  <text class="t" x="562" y="131">/api/food</text>
+  <text class="s" x="562" y="147">chef upload · list · delete</text>
+  <rect class="box" x="752" y="112" width="192" height="46"/>
+  <text class="t" x="766" y="131">/api/ai-service</text>
+  <text class="s" x="766" y="147">generate · recreate · history</text>
+
+  <rect class="box" x="548" y="168" width="192" height="46"/>
+  <text class="t" x="562" y="187">/api/blog</text>
+  <text class="s" x="562" y="203">posts · comments · like/save</text>
+  <rect class="box" x="752" y="168" width="192" height="46"/>
+  <text class="t" x="766" y="187">/api/notifications</text>
+  <text class="s" x="766" y="203">list · mark read</text>
+
+  <rect class="box" x="548" y="224" width="192" height="46"/>
+  <text class="t" x="562" y="243">/api/feedback</text>
+  <text class="s" x="562" y="259">+ /complaint /contactDeveloper</text>
+  <rect class="box" x="752" y="224" width="192" height="46"/>
+  <text class="t" x="766" y="243">/health</text>
+  <text class="s" x="766" y="259">uptime + db status</text>
+
+  <rect class="box" x="548" y="288" width="396" height="80"/>
+  <text class="hd" x="564" y="311">Service layer</text>
+  <text class="s" x="564" y="331">ai.service (Gemini) · email.service (nodemailer) · storage.service (cloud uploads)</text>
+  <text class="s" x="564" y="349">notification.service (persist + socket emit) · logger · pagination · AppError</text>
+
+  <!-- DATA -->
+  <rect class="zone" x="20" y="302" width="476" height="288"/>
+  <text class="zl" x="34" y="324">DATA · MongoDB (Mongoose)</text>
+  <rect class="box" x="40" y="338" width="136" height="42"/>
+  <text class="t" x="54" y="364">user</text>
+  <rect class="box" x="188" y="338" width="136" height="42"/>
+  <text class="t" x="202" y="364">profile</text>
+  <rect class="box" x="336" y="338" width="144" height="42"/>
+  <text class="t" x="350" y="364">foodPosts</text>
+  <rect class="box" x="40" y="392" width="136" height="42"/>
+  <text class="t" x="54" y="418">blog</text>
+  <rect class="box" x="188" y="392" width="136" height="42"/>
+  <text class="t" x="202" y="418">amzeFood</text>
+  <rect class="box" x="336" y="392" width="144" height="42"/>
+  <text class="t" x="350" y="418">createNewFood</text>
+  <rect class="box" x="40" y="446" width="136" height="42"/>
+  <text class="t" x="54" y="472">notification</text>
+  <rect class="box" x="188" y="446" width="136" height="42"/>
+  <text class="t" x="202" y="472">otp</text>
+  <rect class="box" x="336" y="446" width="144" height="42"/>
+  <text class="t" x="350" y="472">blacklist</text>
+  <rect class="box" x="40" y="500" width="136" height="42"/>
+  <text class="t" x="54" y="526">feedback</text>
+  <rect class="box" x="188" y="500" width="136" height="42"/>
+  <text class="t" x="202" y="526">complain</text>
+  <rect class="box" x="336" y="500" width="144" height="42"/>
+  <text class="t" x="350" y="526">contact</text>
+
+  <!-- EXTERNAL -->
+  <rect class="zone" x="532" y="402" width="428" height="188"/>
+  <text class="zl" x="546" y="424">EXTERNAL SERVICES</text>
+  <rect class="box" x="548" y="438" width="192" height="54"/>
+  <text class="t" x="562" y="460">Google Gemini</text>
+  <text class="s" x="562" y="477">recipe generation</text>
+  <rect class="box" x="752" y="438" width="192" height="54"/>
+  <text class="t" x="766" y="460">SMTP (Gmail)</text>
+  <text class="s" x="766" y="477">OTP + contact mail</text>
+  <rect class="box" x="548" y="502" width="192" height="54"/>
+  <text class="t" x="562" y="524">Cloud storage</text>
+  <text class="s" x="562" y="541">images + video</text>
+  <rect class="box" x="752" y="502" width="192" height="54"/>
+  <text class="t" x="766" y="524">Socket.IO server</text>
+  <text class="s" x="766" y="541">room user:&lt;id&gt;</text>
+
+  <!-- FLOWS -->
+  <path class="ln" d="M240 86 H300"/>
+  <path class="ln" d="M480 130 H544"/>
+  <path class="lg" d="M240 221 C 400 221, 430 540, 748 529"/>
+  <path class="ln" d="M644 288 V 276"/>
+  <path class="ln" d="M548 330 C 500 330, 500 340, 484 352"/>
+  <path class="ln" d="M740 340 C 760 380, 700 420, 648 436"/>
+  <text class="s" x="246" y="214" transform="rotate(0)">socket handshake sends cookie</text>
+</svg>
+</div>
+<div class="legend">
+  <span><i class="dot" style="background:var(--muted)"></i> HTTP request path</span>
+  <span><i class="dot" style="background:var(--accent)"></i> WebSocket (real-time)</span>
+  <span><i class="dot" style="background:var(--line)"></i> Logical zone</span>
+</div>
+
+<h2>2 · Request lifecycle</h2>
+<div class="card">
+<div class="pre">Browser
+  │  fetch with credentials (httpOnly cookie "token")
+  ▼
+helmet ─▶ cors allow-list ─▶ express.json ─▶ cookieParser
+  ▼
+sanitizeRequest  (strips injection payloads)
+  ▼
+apiLimiter       (per-IP throttle on every /api route)
+  ▼
+Router match     (/api/auth · /profile · /food · /ai-service · /blog · /notifications · /feedback)
+  ▼
+verifyToken      ─▶ blacklist check ─▶ jwt.verify ─▶ re-read user from DB
+  │                 populates req.auth / req.user / req.userId
+  ▼
+verifyAdmin (role === "chef")  ·  verifyUser (role === "user")   [route-dependent]
+  ▼
+Route limiter    (loginLimiter · otpLimiter · aiLimiter · uploadLimiter)
+  ▼
+multer upload    (food image / blog media → buffer)          [upload routes only]
+  ▼
+zod validate     (body · params · query → 400 on mismatch)
+  ▼
+Controller ──▶ Service (Gemini · SMTP · storage · notification)
+           ──▶ Mongoose model
+  ▼
+JSON response          notFoundHandler ─▶ errorHandler (last resort)</div>
+</div>
+
+<h2>3 · Authentication &amp; roles</h2>
+<div class="grid">
+  <div class="card">
+    <h3>Session</h3>
+    <ul>
+      <li>JWT signed with <code>JWT_KEY</code>, delivered as an <b>httpOnly cookie</b> named <code>token</code></li>
+      <li>Never read by client JavaScript — no XSS token theft</li>
+      <li><b>Logout blacklists</b> the token in Mongo, so it can't be replayed</li>
+      <li><code>verifyToken</code> re-reads the user each request, so role changes apply instantly</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Role guards</h3>
+    <ul>
+      <li><code>verifyToken</code> — any signed-in account</li>
+      <li><code>verifyAdmin</code> — <b>chef only</b> (food upload / delete / chef list)</li>
+      <li><code>verifyUser</code> — <b>user only</b> (complaints)</li>
+      <li><code>requireRole(...)</code> — generic multi-role helper</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>OTP flow</h3>
+    <ul>
+      <li>6-digit code, stored <b>SHA-256 hashed</b></li>
+      <li>Compared with <code>timingSafeEqual</code></li>
+      <li>10-minute lifetime, 60-second resend cooldown</li>
+      <li>Used for signup verification and password reset</li>
+    </ul>
+  </div>
+</div>
+
+<h2>4 · Data model relationships</h2>
+<div class="card scroll">
+<table>
+<thead><tr><th>Collection</th><th>Key fields</th><th>References</th></tr></thead>
+<tbody>
+<tr><td><code>user</code></td><td>username · name · email · password (bcrypt 12) · role · status · resetOtp</td><td><code>follower[]</code> · <code>following[]</code> → user</td></tr>
+<tr><td><code>profile</code></td><td>fullName · contactNumber · dateOfBrith · SocialMedia[] · profession · hobbies[] · bio</td><td><code>user</code> → user <i>(unique)</i></td></tr>
+<tr><td><code>foodPosts</code></td><td>foodImage · foodName · ingredients[] · precautions · description</td><td><code>chef</code> → user</td></tr>
+<tr><td><code>blog</code></td><td>media[] · description · hashtags[] · socialLinks[] · comments[]</td><td><code>createdBy</code> · <code>likes[]</code> · <code>shares[]</code> · <code>savedBy[]</code> → user</td></tr>
+<tr><td><code>amzeFood</code></td><td>ingredient[] · numberofperson · anyMedical · recipe · queuePosition · isDeleted</td><td><code>userId</code> → user</td></tr>
+<tr><td><code>createNewFood</code></td><td>existingFoodname · AddOnIngredient[] · recipe · isDeleted</td><td><code>userId</code> → user</td></tr>
+<tr><td><code>notification</code></td><td>type · title · message · entityId · entityType · isRead</td><td><code>recipient</code> · <code>sender</code> → user</td></tr>
+<tr><td><code>otp</code> / <code>blacklist</code></td><td>hashed OTP · revoked token</td><td><code>user</code> → user</td></tr>
+<tr><td><code>feedback</code> / <code>complain</code> / <code>contact</code></td><td>rating · complainMessage · contact details (hashed)</td><td><code>user</code> → user</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>5 · Real-time notification path</h2>
+<div class="card">
+<div class="pre">User A likes User B's post
+        │
+        ▼
+blog.controller.like_post
+        │
+        ▼
+notification.service.createNotification({ recipient: B, sender: A, type: "LIKE" })
+        │
+        ├──▶ Notification.create(...)              persisted first — survives socket failure
+        │
+        └──▶ io.to("user:B").emit("notification:new", doc)
+                    │
+                    ▼
+        NotificationContext (frontend)
+                    │
+                    ├─▶ prepend to list
+                    ├─▶ unreadCount + 1   →  red badge on the bell
+                    └─▶ toast popup</div>
+<div class="note"><b>Socket authentication:</b> the handshake carries the same <code>token</code> cookie. The server verifies it, checks the blacklist, re-reads the user, then joins the socket to room <code>user:&lt;id&gt;</code>. A client-supplied user id is never trusted.</div>
+</div>
+
+<h2>6 · Soft-delete &amp; undo (AI history)</h2>
+<div class="card">
+<div class="pre">DELETE /api/ai-service/amze/history/:id
+        recipe  ──copy──▶  deletedAIsolution
+        isDeleted = true,  deletedAt = now
+        (row stays in the collection; queries filter isDeleted: false)
+
+PATCH  /api/ai-service/amze/history/:id/undo
+        deletedAIsolution  ──restore──▶  recipe
+        isDeleted = false, deletedAt = null, restoredAt = now</div>
+<p class="sub" style="font-size:14px;margin-top:12px">Both AI collections share this pattern, so a single history screen can delete and restore across <code>amzeFood</code> and <code>createNewFood</code> without knowing which one an item came from — each record is tagged with <code>historyType</code> on the way out.</p>
+</div>
+
+<h2>7 · Defence in depth</h2>
+<div class="grid">
+  <div class="card"><h3>Transport</h3><ul><li>helmet headers</li><li>CORS allow-list from <code>CLIENT_URL</code></li><li><code>trust proxy</code> for real client IPs</li></ul></div>
+  <div class="card"><h3>Input</h3><ul><li>Request sanitisation</li><li>zod schemas on body/params/query</li><li>Body size capped by <code>BODY_LIMIT</code></li></ul></div>
+  <div class="card"><h3>Abuse</h3><ul><li>Global <code>apiLimiter</code></li><li>Per-flow limiters for login, register, OTP, reset</li><li>Separate AI and upload limiters</li></ul></div>
+  <div class="card"><h3>Secrets</h3><ul><li>bcrypt 12 rounds for passwords</li><li>SHA-256 + constant-time compare for OTPs</li><li>Env validated at boot — fail fast</li></ul></div>
+</div>
+
+<h2>8 · Frontend ↔ backend contract</h2>
+<div class="card scroll">
+<table>
+<thead><tr><th>Frontend module</th><th>Talks to</th><th>Screens</th></tr></thead>
+<tbody>
+<tr><td><code>api/auth.api.js</code></td><td>/api/auth</td><td>Register · OTP · Login · Forgot · Reset · Security</td></tr>
+<tr><td><code>api/profile.api.js</code></td><td>/api/profile</td><td>Profile · Create · Edit</td></tr>
+<tr><td><code>api/food.api.js</code></td><td>/api/food</td><td>Explorer · Details · Chef Create · Chef Manage</td></tr>
+<tr><td><code>api/ai.api.js</code></td><td>/api/ai-service</td><td>AI Hub · Create · Result · History · Recreate</td></tr>
+<tr><td><code>api/blog.api.js</code></td><td>/api/blog</td><td>Feed · Post · Create · Hashtag · Saved · Comments</td></tr>
+<tr><td><code>api/notification.api.js</code> + <code>lib/socket.js</code></td><td>/api/notifications + WS</td><td>Notifications · bell badge</td></tr>
+<tr><td><code>api/user.api.js</code></td><td>/api/auth/follow…</td><td>Profile follower counts</td></tr>
+<tr><td><code>api/feedback.api.js</code></td><td>/api/feedback · /complaint · /contactDeveloper</td><td>Settings tabs</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>9 · Deployment topology</h2>
+<div class="card">
+<div class="pre">                    ┌──────────────────────────┐
+  users ───https───▶ │  Static host / CDN       │   frontend dist/
+                    │  SPA fallback → index.html│   built with VITE_API_URL
+                    └────────────┬─────────────┘
+                                 │ XHR + WebSocket (credentials)
+                                 ▼
+                    ┌──────────────────────────┐
+                    │  nginx / load balancer   │   TRUST_PROXY=1
+                    └────────────┬─────────────┘
+                                 ▼
+                    ┌──────────────────────────┐
+                    │  Node process            │   Express + Socket.IO
+                    │  GET /health → 200 / 503 │   share one HTTP server
+                    └────┬──────────┬──────────┘
+                         │          │
+                  ┌──────▼───┐  ┌───▼────────────────────┐
+                  │ MongoDB  │  │ Gemini · SMTP · Storage │
+                  └──────────┘  └────────────────────────┘</div>
+<div class="note"><b>Two env vars, one origin:</b> <code>CLIENT_URL</code> governs REST CORS and <code>FRONTEND_URL</code> governs Socket.IO CORS. Set both to your frontend origin or live notifications will silently fail while the rest of the app works.</div>
+</div>
+
+</div>
+</body>
+</html>

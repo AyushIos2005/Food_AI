@@ -1,19 +1,36 @@
-import { createContext, useContext, useEffect, useState } from "react";
-import * as authApi from "../api/auth";
+import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { loginUser, logoutUser, registerUser } from "../api/auth.api";
+import { disconnectSocket } from "../lib/socket";
 
 const AuthContext = createContext(null);
-const STORAGE_KEY = "dishfinder_user";
+const STORAGE_KEY = "foodai_user";
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // The backend has no "current session" endpoint (JWT lives in an
+    // httpOnly cookie), so we mirror the last-known user in localStorage
+    // purely for instant UI state on refresh. The cookie is the real
+    // source of truth — any 401 from the API clears this again.
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      return raw ? JSON.parse(raw) : null;
+      if (raw) setUser(JSON.parse(raw));
     } catch {
-      return null;
+      // ignore corrupt storage
     }
-  });
-  const [loading, setLoading] = useState(false);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    const handleUnauthorized = () => {
+      persist(null);
+      disconnectSocket();
+    };
+    window.addEventListener("foodai:unauthorized", handleUnauthorized);
+    return () => window.removeEventListener("foodai:unauthorized", handleUnauthorized);
+  }, []);
 
   const persist = (u) => {
     setUser(u);
@@ -21,45 +38,48 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem(STORAGE_KEY);
   };
 
-  const register = async (data) => {
-    setLoading(true);
-    try {
-      const res = await authApi.registerUser(data);
-      persist(res.user);
-      return res;
-    } finally {
-      setLoading(false);
-    }
-  };
+  const login = useCallback(async (payload) => {
+    const { data } = await loginUser(payload);
+    persist(data.user);
+    return data;
+  }, []);
 
-  const login = async (data) => {
-    setLoading(true);
-    try {
-      const res = await authApi.loginUser(data);
-      persist(res.user);
-      return res;
-    } finally {
-      setLoading(false);
-    }
-  };
+  const register = useCallback(async (payload) => {
+    const { data } = await registerUser(payload);
+    return data;
+  }, []);
 
-  const verifyOtp = (data) => authApi.verifyOtp(data);
-
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
-      await authApi.logoutUser();
+      await logoutUser();
     } finally {
       persist(null);
+      disconnectSocket();
     }
-  };
+  }, []);
+
+  const clearSession = useCallback(() => persist(null), []);
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, register, login, verifyOtp, logout, setUser: persist }}
+      value={{
+        user,
+        loading,
+        isAuthenticated: !!user,
+        isChef: user?.role === "chef",
+        login,
+        register,
+        logout,
+        clearSession,
+      }}
     >
       {children}
     </AuthContext.Provider>
   );
 }
 
-export const useAuth = () => useContext(AuthContext);
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
+}
