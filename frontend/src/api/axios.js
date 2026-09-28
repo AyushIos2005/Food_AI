@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // Backend base URL — override with VITE_API_URL in a .env file if needed.
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const BASE_URL = "https://food-ai-1-333t.onrender.com";
 
 const api = axios.create({
   baseURL: BASE_URL,
