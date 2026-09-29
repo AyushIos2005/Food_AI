@@ -1,182 +1,265 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Bookmark, ChefHat, Share2, Tag } from "lucide-react";
-import { getFoodById } from "../api/food";
-import TopBar from "../components/TopBar";
-import { EmptyState, LoadingState } from "../components/States";
-
-function useSavedDishes() {
-  const [saved, setSaved] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem("dishfinder_saved_dishes") || "[]");
-    } catch {
-      return [];
-    }
-  });
-  const toggle = (id) => {
-    setSaved((prev) => {
-      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
-      localStorage.setItem("dishfinder_saved_dishes", JSON.stringify(next));
-      return next;
-    });
-  };
-  return { saved, toggle };
-}
+import { Bookmark, ChefHat, Check, ChevronLeft, Drumstick, Leaf, MapPin, Share2, ShieldAlert, Sparkles, Trash2 } from "lucide-react";
+import { deleteFood, getAllFood } from "../api/food";
+import { getErrorMessage } from "../api/client";
+import { EmptyState, ErrorState, Skeleton } from "../components/States";
+import { Button, IconButton } from "../components/ui/Button";
+import { ConfirmDialog } from "../components/ui/Sheet";
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
+import { asArray, useAsync } from "../hooks/useAsync";
+import { useCooked, useSavedDishes } from "../hooks/useSaved";
+import { isVegetarian, levelOf, LEVELS } from "../utils/dishFilters";
 
 export default function DishDetail() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const [dish, setDish] = useState(location.state?.dish || null);
-  const [loading, setLoading] = useState(!location.state?.dish);
-  const [notFound, setNotFound] = useState(false);
-  const { saved, toggle } = useSavedDishes();
+  const { user } = useAuth();
+  const toast = useToast();
+  const { isSaved, toggle } = useSavedDishes();
+  const { entries: cooked, markCooked } = useCooked();
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [checked, setChecked] = useState(() => new Set());
 
-  useEffect(() => {
-    if (dish) return;
-    getFoodById(id)
-      .then((res) => setDish(res.food))
-      .catch((err) => {
-        if (err?.response?.status === 404) setNotFound(true);
-      })
-      .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
+  // Backend has no "get single dish" route: use the dish handed over by the
+  // list page, otherwise fetch the list ({ foods: [] }) and find it.
+  const stateDish = location.state?.dish || null;
+  const { data, loading, error, reload } = useAsync(
+    (signal) => (stateDish ? Promise.resolve(null) : getAllFood(null, { signal })),
+    [id]
+  );
+  const dish = stateDish || asArray(data?.foods).find((f) => f._id === id) || null;
+  const ingredients = asArray(dish?.ingredients).map(String);
+  const saved = isSaved(id);
+  const canDelete = Boolean(user?.id) && (dish?.chef?._id || dish?.chef) === user.id;
+  const timesCooked = cooked.filter((c) => c.kind === "dish" && c.id === id).length;
 
-  const isSaved = saved.includes(id);
+  const onSave = () => {
+    const now = toggle(id);
+    toast.success(now ? "Recipe saved" : "Removed from saved recipes");
+  };
 
   const share = async () => {
-    const shareData = {
-      title: dish?.foodName,
-      text: `Check out ${dish?.foodName} on FoodMenu!`,
-    };
+    const url = `${window.location.origin}/dish/${id}`;
+    const shareData = { title: dish.foodName, text: `Check out ${dish.foodName} on FOODAI!`, url };
     if (navigator.share) {
       try {
         await navigator.share(shareData);
-      } catch {
-        /* user cancelled share */
+        return;
+      } catch (err) {
+        if (err?.name === "AbortError") return;
       }
-    } else {
-      navigator.clipboard?.writeText(shareData.text);
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success("Link copied");
+    } catch {
+      toast.error("Couldn't copy the link. Try again.");
     }
   };
 
-  if (loading) {
+  const removeDish = async () => {
+    if (deleting) return;
+    setDeleting(true);
+    try {
+      await deleteFood(dish._id);
+      toast.success(`Deleted "${dish.foodName}"`);
+      navigate("/recipes", { replace: true });
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Couldn't delete the dish. Try again."));
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  };
+
+  const cookWithAi = () =>
+    navigate("/ai/create", {
+      state: { mode: "new", ingredients: ingredients.slice(0, 12), note: `I'd like to make ${dish.foodName}.` },
+    });
+  const remixWithAi = () =>
+    navigate("/ai/create", { state: { mode: "recreate", existingFoodname: dish.foodName } });
+
+  if (loading && !dish) {
     return (
-      <div className="min-h-dvh bg-cream">
-        <TopBar title="Dish Detail" />
-        <LoadingState label="Loading dish..." />
+      <div role="status" aria-busy="true" aria-label="Loading recipe..." className="max-w-4xl grid md:grid-cols-2 gap-6">
+        <span className="sr-only">Loading recipe...</span>
+        <Skeleton className="aspect-[4/3] !rounded-[28px]" />
+        <div className="space-y-3">
+          <Skeleton className="h-9 w-3/4" />
+          <Skeleton className="h-4 w-1/3" />
+          <Skeleton className="h-24" />
+          <Skeleton className="h-14" />
+        </div>
       </div>
     );
   }
 
-  if (!dish || notFound) {
+  if (error && !dish) return <ErrorState message={error} onRetry={reload} showBack />;
+
+  if (!dish) {
     return (
-      <div className="min-h-dvh bg-cream flex flex-col">
-        <TopBar title="Dish Detail" />
-        <div className="px-5">
-          <EmptyState
-            title="Dish not found"
-            description="This dish may have been removed or the link is invalid."
-            action={
-              <button onClick={() => navigate("/recipes")} className="btn-primary mt-3">
-                Back to Explore
-              </button>
-            }
+      <EmptyState
+        icon={ChefHat}
+        title="We couldn't find this recipe"
+        description="It may have been removed by the chef."
+        action={<Button onClick={() => navigate("/recipes")}>Browse recipes</Button>}
+      />
+    );
+  }
+
+  const veg = isVegetarian(dish);
+  const level = LEVELS.find((l) => l.key === levelOf(dish));
+
+  return (
+    <div className="max-w-4xl">
+      <div className="flex items-center justify-between mb-4">
+        <Button variant="ghost" size="sm" icon={ChevronLeft} onClick={() => navigate(-1)} className="-ml-3">
+          Back
+        </Button>
+        <div className="flex items-center gap-2">
+          {canDelete && (
+            <IconButton label="Delete dish" icon={Trash2} onClick={() => setConfirmDelete(true)} className="!text-danger" />
+          )}
+          <IconButton label="Share recipe" icon={Share2} onClick={share} />
+          <IconButton
+            label={saved ? "Remove from saved recipes" : "Save recipe"}
+            icon={Bookmark}
+            filled={saved}
+            aria-pressed={saved}
+            onClick={onSave}
+            className={saved ? "!text-orange-700 !border-orange-300" : ""}
           />
         </div>
       </div>
-    );
-  }
 
-  return (
-    <div className="pb-10 lg:pb-0 -mx-4 sm:-mx-6 lg:mx-0">
-      <div className="lg:grid lg:grid-cols-2 lg:gap-8 lg:items-start">
-        <div className="relative lg:rounded-[26px] lg:overflow-hidden lg:sticky lg:top-24">
-          <div className="w-full aspect-[4/3] lg:aspect-square bg-orange-50">
-            {dish.foodImage ? (
-              <img src={dish.foodImage} className="w-full h-full object-cover" alt={dish.foodName} />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-6xl">🍽️</div>
-            )}
-          </div>
-          <div className="absolute top-4 left-4 right-4 flex items-center justify-between">
-            <button
-              onClick={() => navigate(-1)}
-              className="w-9 h-9 rounded-full bg-white/90 flex items-center justify-center lg:hidden"
-            >
-              ←
-            </button>
-            <div className="flex gap-2 ml-auto">
-              <button
-                onClick={share}
-                className="w-9 h-9 rounded-full bg-white/90 flex items-center justify-center"
-              >
-                <Share2 size={16} />
-              </button>
-              <button
-                onClick={() => toggle(id)}
-                className="w-9 h-9 rounded-full bg-white/90 flex items-center justify-center"
-              >
-                <Bookmark size={16} className={isSaved ? "fill-orange-500 text-orange-500" : ""} />
-              </button>
-            </div>
-          </div>
+      <div className="grid md:grid-cols-2 gap-6 md:gap-8 items-start">
+        {/* Fixed aspect box: the layout doesn't jump while the photo loads. */}
+        <div className="aspect-[4/3] rounded-[28px] overflow-hidden bg-orange-50 card">
+          {dish.foodImage ? (
+            <img src={dish.foodImage} className="w-full h-full object-cover" alt={`${dish.foodName}, served`} decoding="async" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-6xl" aria-hidden="true">🍽️</div>
+          )}
         </div>
 
-        <div className="px-5 pt-5 lg:px-0 lg:pt-0">
-          <div className="flex items-start justify-between gap-3">
-            <h1 className="font-display text-2xl lg:text-4xl text-ink">{dish.foodName}</h1>
+        <div>
+          <h2 className="font-display text-3xl sm:text-4xl">{dish.foodName}</h2>
+          <p className="text-[14px] text-ink-soft mt-1">By {dish.chef?.username || "a FOODAI chef"}</p>
+
+          <div className="flex flex-wrap gap-2 mt-4">
+            <span className={`badge ${veg ? "badge-green" : ""}`}>
+              {veg ? <Leaf size={12} aria-hidden="true" /> : <Drumstick size={12} aria-hidden="true" />}
+              {veg ? "Vegetarian" : "Contains meat or egg"}
+            </span>
+            {ingredients.length > 0 && <span className="badge">{ingredients.length} ingredients</span>}
+            {level && <span className="badge" title={level.hint}>{level.label}</span>}
+            {timesCooked > 0 && (
+              <span className="badge badge-green">
+                <Check size={12} aria-hidden="true" /> Cooked {timesCooked === 1 ? "once" : `${timesCooked} times`}
+              </span>
+            )}
           </div>
-          <p className="flex items-center gap-1.5 text-[13px] text-ink-soft mt-1.5">
-            <ChefHat size={14} /> By {dish.chef?.username || "FoodMenu Chef"}
-          </p>
 
-          {dish.description && (
-            <p className="text-[13px] lg:text-[15px] text-ink-soft leading-relaxed mt-4">{dish.description}</p>
-          )}
+          {dish.description && <p className="text-[15px] text-ink-soft leading-relaxed mt-4">{dish.description}</p>}
 
-          {dish.ingredients?.length > 0 && (
-            <div className="mt-5">
-              <h2 className="text-[14px] font-bold text-ink mb-2 flex items-center gap-1.5">
-                <Tag size={14} className="text-orange-500" /> Ingredients
-              </h2>
-              <div className="flex flex-wrap gap-2">
-                {dish.ingredients.map((ing, i) => (
-                  <span
-                    key={i}
-                    className="px-3 py-1.5 rounded-full bg-orange-50 text-orange-700 text-[12px] font-medium"
-                  >
-                    {ing}
-                  </span>
-                ))}
-              </div>
+          <div className="mt-6 flex flex-col gap-3">
+            <Button size="lg" icon={ChefHat} onClick={cookWithAi}>
+              Cook with AI
+            </Button>
+            <div className="grid grid-cols-2 gap-3">
+              <Button variant="outline" icon={Sparkles} onClick={remixWithAi}>
+                Remix with AI
+              </Button>
+              <Button
+                variant="outline"
+                icon={Check}
+                onClick={() => {
+                  markCooked({ id, kind: "dish", name: dish.foodName });
+                  toast.success("Logged in your cooked recipes");
+                }}
+              >
+                I Cooked This
+              </Button>
             </div>
-          )}
-
-          {dish.precautions && (
-            <div className="mt-5 card p-4 bg-orange-50/50">
-              <h2 className="text-[13px] font-bold text-ink mb-1">Precautions</h2>
-              <p className="text-[12px] text-ink-soft">{dish.precautions}</p>
-            </div>
-          )}
-
-          <div className="mt-6 flex gap-3">
-            <button
-              onClick={() => navigate("/recipes")}
-              className="flex-1 lg:flex-none lg:px-8 btn-outline text-[13px]"
-            >
-              More dishes
-            </button>
-            <button
-              onClick={() => navigate("/ai/create")}
-              className="flex-1 lg:flex-none lg:px-8 btn-primary text-[13px]"
-            >
-              Cook this with AI
-            </button>
+            <p className="text-[13px] text-ink-soft">
+              Cook with AI turns this dish's ingredients into a step-by-step recipe you can follow in Cooking Mode.
+            </p>
           </div>
         </div>
       </div>
+
+      <div className="grid md:grid-cols-2 gap-4 mt-8">
+        {ingredients.length > 0 && (
+          <section aria-labelledby="dish-ing" className="card p-5">
+            <div className="flex items-baseline justify-between">
+              <h3 id="dish-ing" className="font-display text-2xl">Ingredients</h3>
+              <p className="text-[13px] text-ink-soft">{checked.size} of {ingredients.length} ready</p>
+            </div>
+            <ul className="mt-2">
+              {ingredients.map((ing, i) => {
+                const on = checked.has(i);
+                return (
+                  <li key={i}>
+                    <label className="flex items-center gap-3 min-h-11 py-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={on}
+                        onChange={() =>
+                          setChecked((prev) => {
+                            const next = new Set(prev);
+                            if (on) next.delete(i);
+                            else next.add(i);
+                            return next;
+                          })
+                        }
+                        className="w-5 h-5 accent-orange-700 shrink-0"
+                      />
+                      <span className={`text-[15px] ${on ? "line-through text-ink-soft" : "text-ink"}`}>{ing}</span>
+                    </label>
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+
+        <div className="space-y-4">
+          {dish.precautions && (
+            <section aria-labelledby="dish-prec" className="card p-5 !border-orange-300 !bg-orange-50/70">
+              <h3 id="dish-prec" className="font-display text-xl flex items-center gap-2">
+                <ShieldAlert size={18} className="text-orange-800" aria-hidden="true" /> Dietary notes
+              </h3>
+              <p className="text-[14px] text-ink-soft mt-1">{dish.precautions}</p>
+            </section>
+          )}
+          <section aria-labelledby="dish-where" className="card p-5">
+            <h3 id="dish-where" className="font-display text-xl">Where to eat</h3>
+            <p className="text-[14px] text-ink-soft mt-1 mb-3">Find restaurants near you serving this dish.</p>
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${dish.foodName} restaurant near me`)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-outline w-full"
+            >
+              <MapPin size={16} aria-hidden="true" /> Find nearby<span className="sr-only"> (opens Google Maps in a new tab)</span>
+            </a>
+          </section>
+        </div>
+      </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        danger
+        busy={deleting}
+        title="Delete this dish?"
+        message={`"${dish.foodName}" will be removed for everyone. This can't be undone.`}
+        confirmLabel="Delete dish"
+        onCancel={() => setConfirmDelete(false)}
+        onConfirm={removeDish}
+      />
     </div>
   );
 }

@@ -1,89 +1,66 @@
-import { createContext, useContext, useCallback, useEffect, useState } from "react";
-import toast from "react-hot-toast";
-import {
-  getNotifications,
-  markNotificationRead,
-  markAllNotificationsRead,
-} from "../api/notification.api";
-import { connectSocket, disconnectSocket } from "../lib/socket";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { getNotifications } from "../api/notifications";
+import { connectSocket, disconnectSocket } from "../socket";
+import { isCanceled } from "../api/client";
 import { useAuth } from "./AuthContext";
 
 const NotificationContext = createContext(null);
 
+// Owns the unread badge count and the single Socket.IO connection.
+// Backend emits "notification:new" (payload: the saved Notification) to the
+// room of the logged-in user.
 export function NotificationProvider({ children }) {
   const { isAuthenticated } = useAuth();
-  const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const listeners = useRef(new Set());
 
-  const refresh = useCallback(async () => {
-    if (!isAuthenticated) return;
-    setLoading(true);
-    try {
-      const { data } = await getNotifications({ page: 1, limit: 20 });
-      setNotifications(data.data || []);
-      setUnreadCount(data.unreadCount || 0);
-    } catch {
-      // Silent — a notification fetch failure shouldn't interrupt the user.
-    } finally {
-      setLoading(false);
-    }
-  }, [isAuthenticated]);
+  // Pages (e.g. the Notifications list) can react to live events.
+  const subscribe = useCallback((fn) => {
+    listeners.current.add(fn);
+    return () => listeners.current.delete(fn);
+  }, []);
 
   useEffect(() => {
     if (!isAuthenticated) {
-      setNotifications([]);
       setUnreadCount(0);
-      disconnectSocket();
-      return;
+      return undefined;
     }
 
-    refresh();
+    const controller = new AbortController();
+
+    // Initial unread count from the REST API.
+    getNotifications({ limit: 1 }, { signal: controller.signal })
+      .then((res) => setUnreadCount(Number(res?.unreadCount) || 0))
+      .catch((err) => {
+        if (!isCanceled(err)) console.warn("Could not load unread count:", err.message);
+      });
 
     const socket = connectSocket();
     const onNew = (notification) => {
-      setNotifications((prev) => [notification, ...prev]);
+      if (!notification) return;
       setUnreadCount((c) => c + 1);
-      toast(notification.title || "New notification", { icon: "🔔" });
+      listeners.current.forEach((fn) => fn(notification));
+    };
+    const onConnectError = (err) => {
+      console.warn("Socket.IO connection error:", err?.message);
     };
     socket.on("notification:new", onNew);
+    socket.on("connect_error", onConnectError);
 
     return () => {
+      controller.abort();
       socket.off("notification:new", onNew);
+      socket.off("connect_error", onConnectError);
+      disconnectSocket(); // no duplicate connections on re-login / StrictMode
     };
-  }, [isAuthenticated, refresh]);
+  }, [isAuthenticated]);
 
-  const markRead = useCallback(async (id) => {
-    setNotifications((prev) => prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)));
-    setUnreadCount((c) => Math.max(0, c - 1));
-    try {
-      await markNotificationRead(id);
-    } catch {
-      refresh();
-    }
-  }, [refresh]);
-
-  const markAllRead = useCallback(async () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
-    setUnreadCount(0);
-    try {
-      await markAllNotificationsRead();
-    } catch {
-      refresh();
-    }
-  }, [refresh]);
-
-  return (
-    <NotificationContext.Provider
-      value={{ notifications, unreadCount, loading, refresh, markRead, markAllRead }}
-    >
-      {children}
-    </NotificationContext.Provider>
+  const value = useMemo(
+    () => ({ unreadCount, setUnreadCount, subscribe }),
+    [unreadCount, subscribe]
   );
+
+  return <NotificationContext.Provider value={value}>{children}</NotificationContext.Provider>;
 }
 
-export function useNotifications() {
-  const ctx = useContext(NotificationContext);
-  if (!ctx) throw new Error("useNotifications must be used within NotificationProvider");
-  return ctx;
-}
+export const useNotifications = () => useContext(NotificationContext);

@@ -1,29 +1,47 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ImagePlus, X } from "lucide-react";
 import { createBlog } from "../api/blog";
 import { useToast } from "../context/ToastContext";
+import { getErrorMessage } from "../api/client";
+import { Button, IconButton } from "../components/ui/Button";
 
+const MAX_FILES = 10;
+const MAX_FILE_MB = 50; // backend limit (blogUpload middleware)
+
+// POST /api/blog/create-blog, multipart/form-data: description + media (1..10)
 export default function CreatePost() {
   const [description, setDescription] = useState("");
   const [files, setFiles] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
   const fileInput = useRef(null);
   const navigate = useNavigate();
   const toast = useToast();
 
-  const previews = files.map((f) => ({ src: URL.createObjectURL(f), type: f.type }));
+  // Create each object URL once per file list and release it afterwards.
+  const previews = useMemo(
+    () => files.map((f) => ({ src: URL.createObjectURL(f), type: f.type })),
+    [files]
+  );
+  useEffect(() => () => previews.forEach((p) => URL.revokeObjectURL(p.src)), [previews]);
 
   const onPickFiles = (e) => {
     const picked = Array.from(e.target.files || []);
-    setFiles((prev) => [...prev, ...picked].slice(0, 10));
+    e.target.value = ""; // allow picking the same file again
+    const valid = picked.filter((f) => f.type.startsWith("image/") || f.type.startsWith("video/"));
+    if (valid.length !== picked.length) setError("Only images and videos are allowed.");
+    const small = valid.filter((f) => f.size <= MAX_FILE_MB * 1024 * 1024);
+    if (small.length !== valid.length) setError(`Each file must be under ${MAX_FILE_MB} MB.`);
+    setFiles((prev) => [...prev, ...small].slice(0, MAX_FILES));
   };
 
   const removeFile = (idx) => setFiles((prev) => prev.filter((_, i) => i !== idx));
 
   const submit = async (e) => {
     e.preventDefault();
+    if (loading) return;
     setError("");
     if (!description.trim()) {
       setError("Please write something about your post.");
@@ -34,17 +52,21 @@ export default function CreatePost() {
       return;
     }
     setLoading(true);
+    setProgress(0);
     try {
       const formData = new FormData();
-      formData.append("description", description);
-      files.forEach((f) => formData.append("media", f));
-      await createBlog(formData);
+      formData.append("description", description.trim());
+      files.forEach((f) => formData.append("media", f)); // field name must be "media"
+      await createBlog(formData, {
+        onUploadProgress: (ev) => ev.total && setProgress(Math.round((ev.loaded / ev.total) * 100)),
+      });
       toast.success("Post published");
       navigate("/community");
     } catch (err) {
-      setError(err.message);
-      toast.error(err.message);
-    } finally {
+      // Keep the form contents so the user can retry.
+      const msg = getErrorMessage(err, "Couldn't publish your post. Try again.");
+      setError(msg);
+      toast.error(msg);
       setLoading(false);
     }
   };
@@ -70,14 +92,15 @@ export default function CreatePost() {
                 {p.type.startsWith("video") ? (
                   <video src={p.src} className="w-full h-full object-cover" />
                 ) : (
-                  <img src={p.src} className="w-full h-full object-cover" alt="" />
+                  <img src={p.src} className="w-full h-full object-cover" alt="Selected media" />
                 )}
                 <button
                   type="button"
                   onClick={() => removeFile(i)}
-                  className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center"
+                  aria-label="Remove this file"
+                  className="absolute top-1 right-1 w-7 h-7 rounded-full bg-black/70 text-white flex items-center justify-center"
                 >
-                  <X size={12} />
+                  <X size={13} aria-hidden="true" />
                 </button>
               </div>
             ))}
@@ -95,11 +118,11 @@ export default function CreatePost() {
           />
         </div>
 
-        {error && <p className="text-[13px] text-red-500">{error}</p>}
+        {error && <p role="alert" className="text-[14px] font-medium text-danger">{error}</p>}
 
-        <button className="btn-primary" disabled={loading}>
-          {loading ? "Publishing..." : "Publish"}
-        </button>
+        <Button type="submit" size="lg" loading={loading}>
+          {loading ? (progress > 0 && progress < 100 ? `Uploading ${progress}%` : "Publishing...") : "Publish"}
+        </Button>
       </form>
     </div>
   );

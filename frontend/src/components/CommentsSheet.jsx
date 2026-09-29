@@ -1,105 +1,203 @@
-import { useEffect, useState } from "react";
-import { X, Send, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { CornerDownRight, Send, Trash2 } from "lucide-react";
 import { getComments, addComment, deleteComment } from "../api/blog";
+import { getErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { asArray, useAsync } from "../hooks/useAsync";
+import { timeAgo } from "../utils/format";
+import { BottomSheet } from "./ui/Sheet";
+import Avatar from "./ui/Avatar";
+import { IconButton } from "./ui/Button";
+import { Skeleton } from "./States";
 
-export default function CommentsSheet({ blog, onClose }) {
-  const [comments, setComments] = useState([]);
+const nameOf = (u) => u?.name || u?.username || "Someone";
+
+// Bottom sheet on phones, dialog on desktop. Comments appear the moment you
+// send them and are rolled back (with your text restored) if the request fails.
+export default function CommentsSheet({ blog, onClose, onCommentsChange }) {
   const [text, setText] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [replyTo, setReplyTo] = useState(null);
+  const [sending, setSending] = useState([]); // optimistic comments not yet confirmed
+  const [removingId, setRemovingId] = useState(null);
+  const inputRef = useRef(null);
   const { user } = useAuth();
   const toast = useToast();
 
-  const load = () =>
-    getComments(blog._id)
-      .then((res) => setComments(res.data || []))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+  // Backend contract: { success, count, data: Comment[] } where each comment
+  // is { _id, text, user: { _id, name, username }, createdAt }.
+  const { data, setData, loading, error, reload } = useAsync(
+    (signal) => getComments(blog._id, { signal }),
+    [blog._id]
+  );
+  const comments = [...asArray(data?.data), ...sending];
 
+  // Keep the comment count on the feed card in sync.
   useEffect(() => {
-    load();
+    if (data) onCommentsChange?.(asArray(data.data));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blog._id]);
+  }, [data]);
+
+  const startReply = (comment) => {
+    const handle = comment.user?.username || comment.user?.name;
+    if (!handle) return;
+    setReplyTo(nameOf(comment.user));
+    setText((t) => (t.startsWith(`@${handle} `) ? t : `@${handle} ${t}`));
+    inputRef.current?.focus();
+  };
 
   const submit = async (e) => {
     e.preventDefault();
-    if (!text.trim()) return;
+    const value = text.trim();
+    if (!value) return;
+
+    const temp = {
+      _id: `sending-${Date.now()}`,
+      text: value,
+      user: { _id: user?.id, name: user?.name, username: user?.username },
+      createdAt: new Date().toISOString(),
+      sending: true,
+    };
+    setSending((s) => [...s, temp]);
+    setText("");
+    setReplyTo(null);
+
     try {
-      await addComment(blog._id, text.trim());
-      setText("");
+      const res = await addComment(blog._id, value);
+      const saved = res?.data;
+      if (saved?._id) {
+        // Show the saved comment right away, using what we know about the author.
+        const author = saved.user && typeof saved.user === "object" && saved.user.name ? saved.user : temp.user;
+        setData((prev) => ({ ...prev, data: [...asArray(prev?.data), { ...saved, user: author }] }));
+      } else {
+        reload();
+      }
       toast.success("Comment added");
-      load();
     } catch (err) {
-      setError(err.message);
-      toast.error(err.message);
+      setText(value); // give the text back so nothing is lost
+      toast.error(getErrorMessage(err, "Couldn't post your comment. Try again."));
+    } finally {
+      setSending((s) => s.filter((c) => c._id !== temp._id));
     }
   };
 
   const remove = async (commentId) => {
+    if (removingId) return;
+    setRemovingId(commentId);
     try {
       await deleteComment(blog._id, commentId);
-      load();
+      setData((prev) => ({ ...prev, data: asArray(prev?.data).filter((c) => c._id !== commentId) }));
+      toast.success("Comment deleted");
     } catch (err) {
-      toast.error(err.message);
+      toast.error(getErrorMessage(err, "Couldn't delete the comment. Try again."));
+    } finally {
+      setRemovingId(null);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center lg:items-center">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-lg bg-white rounded-t-3xl lg:rounded-3xl max-h-[80vh] flex flex-col">
-        <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-(--color-line)">
-          <h2 className="text-[15px] font-bold text-ink">Comments</h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-cream flex items-center justify-center">
-            <X size={18} />
-          </button>
-        </div>
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          {error && <p className="text-[12px] text-red-500 mb-2">{error}</p>}
-          {loading ? (
-            <div className="space-y-3">
-              <div className="h-12 skeleton" />
-              <div className="h-12 skeleton" />
-            </div>
-          ) : comments.length === 0 ? (
-            <p className="text-[13px] text-ink-soft text-center py-10">
-              No comments yet. Start the conversation.
+    <BottomSheet
+      open
+      onClose={onClose}
+      title={`Comments${comments.length ? ` (${comments.length})` : ""}`}
+      footer={
+        <form onSubmit={submit}>
+          {replyTo && (
+            <p className="flex items-center gap-1.5 text-[13px] text-ink-soft mb-2">
+              <CornerDownRight size={14} aria-hidden="true" /> Replying to {replyTo}
+              <button
+                type="button"
+                onClick={() => {
+                  setReplyTo(null);
+                  setText("");
+                }}
+                className="ml-auto text-orange-700 font-semibold min-h-8 px-2"
+              >
+                Cancel
+              </button>
             </p>
-          ) : (
-            comments.map((c) => (
-              <div key={c._id} className="flex items-start gap-2.5 mb-4">
-                <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center text-[11px] font-semibold text-orange-700 shrink-0">
-                  {(c.user?.name || c.user?.username || "U")[0]?.toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0 bg-cream rounded-2xl px-3 py-2">
-                  <p className="text-[12px] font-semibold text-ink">
-                    {c.user?.name || c.user?.username}
-                  </p>
-                  <p className="text-[13px] text-ink-soft">{c.text}</p>
-                </div>
-                {(c.user?._id === user?.id || blog.createdBy?._id === user?.id) && (
-                  <button onClick={() => remove(c._id)} className="text-ink-soft/40 mt-2">
-                    <Trash2 size={14} />
-                  </button>
-                )}
-              </div>
-            ))
           )}
-        </div>
-        <form onSubmit={submit} className="flex items-center gap-2 px-4 py-3 border-t border-(--color-line)">
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Add a comment..."
-            className="input-field flex-1"
-          />
-          <button type="submit" className="w-11 h-11 rounded-full bg-orange-500 flex items-center justify-center text-white shrink-0">
-            <Send size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            <label htmlFor="comment-input" className="sr-only">
+              Add a comment
+            </label>
+            <input
+              id="comment-input"
+              ref={inputRef}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Add a comment..."
+              maxLength={1000}
+              autoComplete="off"
+              className="input-field flex-1"
+            />
+            <button
+              type="submit"
+              disabled={!text.trim()}
+              aria-label="Send comment"
+              className="w-12 h-12 rounded-full bg-orange-700 flex items-center justify-center text-white shrink-0 disabled:opacity-50 hover:bg-orange-800 transition"
+            >
+              <Send size={18} aria-hidden="true" />
+            </button>
+          </div>
         </form>
-      </div>
-    </div>
+      }
+    >
+      {loading && !data ? (
+        <div role="status" aria-busy="true" aria-label="Loading comments..." className="space-y-4">
+          <span className="sr-only">Loading comments...</span>
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex gap-2.5" aria-hidden="true">
+              <Skeleton className="w-9 h-9 !rounded-full shrink-0" />
+              <Skeleton className="h-14 flex-1 !rounded-2xl" />
+            </div>
+          ))}
+        </div>
+      ) : error && !data ? (
+        <div role="alert" className="text-center py-8">
+          <p className="text-[14px] text-ink mb-3">{error}</p>
+          <button type="button" onClick={reload} className="btn-outline btn-sm">
+            Try again
+          </button>
+        </div>
+      ) : comments.length === 0 ? (
+        <p className="text-[14px] text-ink-soft text-center py-10">No comments yet. Be the first to say something.</p>
+      ) : (
+        <ul className="space-y-4">
+          {comments.map((c) => {
+            const canDelete = !c.sending && (c.user?._id === user?.id || blog.createdBy?._id === user?.id);
+            return (
+              <li key={c._id} className={`flex items-start gap-2.5 ${c.sending ? "opacity-60" : ""}`}>
+                <Avatar name={nameOf(c.user)} size={36} />
+                <div className="flex-1 min-w-0">
+                  <div className="bg-cream rounded-2xl px-3.5 py-2.5">
+                    <p className="text-[13px] font-semibold text-ink">{nameOf(c.user)}</p>
+                    <p className="text-[14px] text-ink break-words whitespace-pre-line">{c.text}</p>
+                  </div>
+                  <div className="flex items-center gap-3 mt-1 px-2 text-[12px] text-ink-soft">
+                    <span>{c.sending ? "Sending..." : timeAgo(c.createdAt)}</span>
+                    {!c.sending && c.user?.username && (
+                      <button type="button" onClick={() => startReply(c)} className="font-semibold hover:text-ink min-h-8">
+                        Reply
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {canDelete && (
+                  <IconButton
+                    label="Delete comment"
+                    icon={Trash2}
+                    size={16}
+                    onClick={() => remove(c._id)}
+                    disabled={removingId === c._id}
+                    className="!border-transparent !bg-transparent text-ink-soft hover:!text-danger"
+                  />
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </BottomSheet>
   );
 }

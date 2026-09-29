@@ -1,85 +1,121 @@
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { loginUser, logoutUser, registerUser } from "../api/auth.api";
-import { disconnectSocket } from "../lib/socket";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import * as authApi from "../api/auth";
+import { UNAUTHORIZED_EVENT, isCanceled } from "../api/client";
 
 const AuthContext = createContext(null);
-const STORAGE_KEY = "foodai_user";
+const STORAGE_KEY = "dishfinder_user";
 
+// localStorage only remembers WHO the user was, so the UI can show a name
+// while we verify. It never decides whether the user is logged in: the
+// backend cookie does, and we ask the backend on every app load.
+function readStoredUser() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+// status: "checking" (verifying cookie with backend)
+//       | "authenticated"
+//       | "unauthenticated"
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(readStoredUser);
+  const [status, setStatus] = useState(() => (readStoredUser() ? "checking" : "unauthenticated"));
 
-  useEffect(() => {
-    // The backend has no "current session" endpoint (JWT lives in an
-    // httpOnly cookie), so we mirror the last-known user in localStorage
-    // purely for instant UI state on refresh. The cookie is the real
-    // source of truth — any 401 from the API clears this again.
+  const clearAuth = useCallback(() => {
+    setUser(null);
+    setStatus("unauthenticated");
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) setUser(JSON.parse(raw));
+      localStorage.removeItem(STORAGE_KEY);
     } catch {
-      // ignore corrupt storage
+      /* storage unavailable */
     }
-    setLoading(false);
   }, []);
 
+  const startSession = useCallback((u) => {
+    setUser(u || null);
+    setStatus(u ? "authenticated" : "unauthenticated");
+    try {
+      if (u) localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
+      else localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      /* storage unavailable */
+    }
+  }, []);
+
+  // 1) Verify the stored session with the backend once on load.
   useEffect(() => {
-    const handleUnauthorized = () => {
-      persist(null);
-      disconnectSocket();
-    };
-    window.addEventListener("foodai:unauthorized", handleUnauthorized);
-    return () => window.removeEventListener("foodai:unauthorized", handleUnauthorized);
-  }, []);
+    if (!readStoredUser()) return undefined;
+    const controller = new AbortController();
+    authApi
+      .checkSession({ signal: controller.signal })
+      .then(() => setStatus("authenticated"))
+      .catch((err) => {
+        if (isCanceled(err)) return;
+        if (err.status === 401) clearAuth();
+        // Backend unreachable / 5xx: we can't prove the session, so don't
+        // treat the user as logged in. Keep the stored name for next time.
+        else setStatus("unauthenticated");
+      });
+    return () => controller.abort();
+  }, [clearAuth]);
 
-  const persist = (u) => {
-    setUser(u);
-    if (u) localStorage.setItem(STORAGE_KEY, JSON.stringify(u));
-    else localStorage.removeItem(STORAGE_KEY);
-  };
+  // 2) Any 401 from any API call clears auth; route guards redirect to /login.
+  useEffect(() => {
+    window.addEventListener(UNAUTHORIZED_EVENT, clearAuth);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, clearAuth);
+  }, [clearAuth]);
 
-  const login = useCallback(async (payload) => {
-    const { data } = await loginUser(payload);
-    persist(data.user);
-    return data;
-  }, []);
+  const register = useCallback(
+    async (data) => {
+      const res = await authApi.registerUser(data);
+      // Backend sets the auth cookie at registration; OTP verification
+      // happens next.
+      startSession(res.user);
+      return res;
+    },
+    [startSession]
+  );
 
-  const register = useCallback(async (payload) => {
-    const { data } = await registerUser(payload);
-    return data;
-  }, []);
+  const login = useCallback(
+    async (data) => {
+      const res = await authApi.loginUser(data);
+      startSession(res.user);
+      return res;
+    },
+    [startSession]
+  );
+
+  const verifyOtp = useCallback((data) => authApi.verifyOtp(data), []);
 
   const logout = useCallback(async () => {
     try {
-      await logoutUser();
+      await authApi.logoutUser();
+    } catch {
+      /* even if the request fails, drop the local session */
     } finally {
-      persist(null);
-      disconnectSocket();
+      clearAuth();
     }
-  }, []);
+  }, [clearAuth]);
 
-  const clearSession = useCallback(() => persist(null), []);
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        isAuthenticated: !!user,
-        isChef: user?.role === "chef",
-        login,
-        register,
-        logout,
-        clearSession,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const value = useMemo(
+    () => ({
+      user,
+      status,
+      isAuthenticated: status === "authenticated",
+      isChecking: status === "checking",
+      isChef: user?.role === "chef",
+      register,
+      login,
+      verifyOtp,
+      logout,
+    }),
+    [user, status, register, login, verifyOtp, logout]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
-  return ctx;
-}
+export const useAuth = () => useContext(AuthContext);

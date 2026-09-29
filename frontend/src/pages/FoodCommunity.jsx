@@ -1,148 +1,105 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Plus, Search } from "lucide-react";
-import { getAllBlogs, toggleLike, toggleSave, toggleShare } from "../api/blog";
-import { getFollowing } from "../api/auth";
+import { useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Plus, Search, X } from "lucide-react";
+import { deleteBlog, getAllBlogs } from "../api/blog";
+import { getErrorMessage } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import BlogCard from "../components/BlogCard";
 import CommentsSheet from "../components/CommentsSheet";
-import { EmptyState, ErrorState, LoadingState } from "../components/States";
+import { ConfirmDialog } from "../components/ui/Sheet";
+import { Button } from "../components/ui/Button";
+import { EmptyState, ErrorState, SkeletonPosts } from "../components/States";
+import { asArray, useAsync } from "../hooks/useAsync";
+import { useBlogActions } from "../hooks/useBlogActions";
 
 export default function FoodCommunity() {
-  const [blogs, setBlogs] = useState([]);
-  const [followingIds, setFollowingIds] = useState(null);
-  const [tab, setTab] = useState("forYou");
-  const [query, setQuery] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [params, setParams] = useSearchParams();
+  const q = params.get("q") || "";
   const [activeComments, setActiveComments] = useState(null);
+  const [toDelete, setToDelete] = useState(null);
+  const [deleting, setDeleting] = useState(false);
   const { user } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
 
-  const load = () =>
-    getAllBlogs()
-      .then((res) => setBlogs(res.data || []))
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+  // Backend contract: { success, count, data: Blog[] }
+  const { data, setData, loading, error, reload } = useAsync((signal) => getAllBlogs(null, { signal }), []);
+  const blogs = asArray(data?.data);
 
-  useEffect(() => {
-    load();
-  }, []);
+  const update = (id, patch) =>
+    setData((prev) => ({
+      ...prev,
+      data: asArray(prev?.data).map((b) => (b._id === id ? { ...b, ...(typeof patch === "function" ? patch(b) : patch) } : b)),
+    }));
 
-  useEffect(() => {
-    if (tab !== "following" || followingIds || !user?.id) return;
-    getFollowing(user.id)
-      .then((res) => setFollowingIds((res.following || []).map((u) => u._id || u)))
-      .catch(() => setFollowingIds([]));
-  }, [tab, followingIds, user?.id]);
+  const { like, save, share } = useBlogActions({ update, userId: user?.id });
 
-  const applyBlogUpdate = (id, patch) =>
-    setBlogs((prev) => prev.map((b) => (b._id === id ? { ...b, ...patch } : b)));
+  const setQuery = (value) => setParams(value ? { q: value } : {}, { replace: true });
 
-  const handleLike = async (blog) => {
-    try {
-      const res = await toggleLike(blog._id);
-      const likes = res.liked
-        ? [...(blog.likes || []), user?.id]
-        : (blog.likes || []).filter((u) => (u._id || u) !== user?.id);
-      applyBlogUpdate(blog._id, { likes });
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
-  const handleSave = async (blog) => {
-    try {
-      const res = await toggleSave(blog._id);
-      const savedBy = res.saved
-        ? [...(blog.savedBy || []), user?.id]
-        : (blog.savedBy || []).filter((u) => (u._id || u) !== user?.id);
-      applyBlogUpdate(blog._id, { savedBy });
-      toast.success(res.saved ? "Saved" : "Removed from saved");
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
-  const handleShare = async (blog) => {
-    try {
-      const res = await toggleShare(blog._id);
-      applyBlogUpdate(blog._id, { shares: new Array(res.shareCount).fill(null) });
-      toast.success("Shared");
-      if (navigator.share) {
-        navigator.share({ title: "FoodMenu", text: blog.description }).catch(() => {});
-      }
-    } catch (err) {
-      toast.error(err.message);
-    }
-  };
-
-  const filtered = blogs
-    .filter(
+  const filtered = useMemo(() => {
+    const query = q.trim().toLowerCase();
+    if (!query) return blogs;
+    return blogs.filter(
       (b) =>
-        !query ||
-        b.description?.toLowerCase().includes(query.toLowerCase()) ||
-        b.hashtags?.some((h) => h.includes(query.toLowerCase()))
-    )
-    .filter((b) => {
-      if (tab !== "following") return true;
-      const authorId = b.createdBy?._id || b.createdBy;
-      return (followingIds || []).includes(authorId);
-    });
+        b.description?.toLowerCase().includes(query) ||
+        asArray(b.hashtags).some((h) => String(h).toLowerCase().includes(query.replace(/^#/, "")))
+    );
+  }, [blogs, q]);
+
+  const confirmDelete = async () => {
+    if (!toDelete || deleting) return;
+    setDeleting(true);
+    try {
+      await deleteBlog(toDelete._id);
+      setData((prev) => ({ ...prev, data: asArray(prev?.data).filter((b) => b._id !== toDelete._id) }));
+      toast.success("Post deleted");
+      setToDelete(null);
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Couldn't delete the post. Try again."));
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
     <div>
       <div className="flex items-end justify-between gap-4 mb-6">
         <div>
-          <p className="text-[12px] tracking-[0.18em] text-orange-600 font-semibold">COMMUNITY</p>
-          <h2 className="font-display text-3xl mt-1">Stories from the table</h2>
+          <h2 className="font-display text-3xl">Stories from the table</h2>
+          <p className="text-[15px] text-ink-soft mt-1">See what the community is cooking.</p>
         </div>
-        <button onClick={() => navigate("/community/create")} className="btn-primary flex items-center gap-2 py-3">
-          <Plus size={16} /> New post
-        </button>
+        <Button icon={Plus} onClick={() => navigate("/community/create")}>
+          New post
+        </Button>
       </div>
 
-      <div className="flex items-center gap-2 bg-white border border-(--color-line) rounded-2xl px-4 py-3 mb-4">
-        <Search size={16} className="text-ink-soft/50" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search posts, tags..."
-          className="flex-1 outline-none text-[14px] bg-transparent"
-        />
-      </div>
-
-      <div className="flex gap-2 mb-6">
-        {[
-          { key: "forYou", label: "For You" },
-          { key: "following", label: "Following" },
-        ].map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-4 py-2 rounded-full text-[12px] font-semibold ${
-              tab === t.key ? "bg-orange-500 text-white" : "bg-white border border-(--color-line) text-ink-soft"
-            }`}
-          >
-            {t.label}
+      <form role="search" onSubmit={(e) => e.preventDefault()} className="search-field mb-6">
+        <Search size={18} className="text-ink-soft shrink-0" aria-hidden="true" />
+        <label htmlFor="community-search" className="sr-only">Search posts and tags</label>
+        <input id="community-search" type="search" value={q} onChange={(e) => setQuery(e.target.value)} placeholder="Search posts, #tags..." autoComplete="off" />
+        {q && (
+          <button type="button" aria-label="Clear search" onClick={() => setQuery("")} className="w-11 h-11 rounded-full flex items-center justify-center text-ink-soft hover:bg-orange-50">
+            <X size={18} aria-hidden="true" />
           </button>
-        ))}
-      </div>
+        )}
+      </form>
 
-      {error && <ErrorState message={error} onRetry={() => { setLoading(true); load(); }} />}
-      {loading || (tab === "following" && followingIds === null) ? (
-        <LoadingState label="Loading community..." />
+      {loading ? (
+        <SkeletonPosts label="Loading community..." />
+      ) : error ? (
+        <ErrorState message={error} onRetry={reload} />
       ) : filtered.length === 0 ? (
         <EmptyState
-          title={tab === "following" ? "Nobody to show yet" : "No posts yet"}
-          description={
-            tab === "following"
-              ? "Follow chefs and food lovers to see their posts here."
-              : "Share a recipe, a plate, or a kitchen story."
+          title={blogs.length === 0 ? "No posts yet" : "No matching posts"}
+          description={blogs.length === 0 ? "Share a recipe, a plate, or a kitchen story." : "Try a different search."}
+          action={
+            blogs.length === 0 ? (
+              <Button onClick={() => navigate("/community/create")}>Create post</Button>
+            ) : (
+              <Button variant="outline" onClick={() => setQuery("")}>Clear search</Button>
+            )
           }
-          action={<button onClick={() => navigate("/community/create")} className="btn-primary mt-3">Create post</button>}
         />
       ) : (
         <div className="max-w-2xl">
@@ -151,18 +108,38 @@ export default function FoodCommunity() {
               key={b._id}
               blog={b}
               currentUserId={user?.id}
-              onLike={handleLike}
-              onSave={handleSave}
-              onShare={handleShare}
+              onLike={like}
+              onSave={save}
+              onShare={share}
+              onDelete={setToDelete}
               onOpenComments={setActiveComments}
+              onHashtag={setQuery}
             />
           ))}
         </div>
       )}
 
       {activeComments && (
-        <CommentsSheet blog={activeComments} onClose={() => setActiveComments(null)} />
+        <CommentsSheet
+          blog={activeComments}
+          onClose={() => setActiveComments(null)}
+          onCommentsChange={(comments) => {
+            update(activeComments._id, { comments });
+            setActiveComments((c) => (c ? { ...c, comments } : c));
+          }}
+        />
       )}
+
+      <ConfirmDialog
+        open={Boolean(toDelete)}
+        danger
+        busy={deleting}
+        title="Delete this post?"
+        message="This post and its comments will be removed for everyone. This can't be undone."
+        confirmLabel="Delete post"
+        onCancel={() => setToDelete(null)}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

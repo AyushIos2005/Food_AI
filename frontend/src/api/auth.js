@@ -1,20 +1,24 @@
 import client from "./client";
 
-// Maps 1:1 to backend/src/routes/user.route.js -> mounted at /api/auth
+// Backend: src/routes/user.route.js, mounted at /api/auth.
+// NOTE: "vefiyOtp" is the backend's real (misspelled) route. Do not "fix" it.
+
+/** @returns {Promise<{message:string,user:{id,username,name,email,role}}>} */
 export const registerUser = (data) =>
   client.post("/auth/register", data).then((r) => r.data);
-// data: { username, name, email, password, role } role: "user" | "chef"
+// data: { username, name, email, password, role: "user" | "chef" }
 
+/** @returns {Promise<{message:string,user:{id,username,name,email,role}}>} */
 export const loginUser = (data) =>
   client.post("/auth/login", data).then((r) => r.data);
 // data: { username OR email, password }
 
+/** @returns {Promise<{message:string}>} */
 export const verifyOtp = (data) =>
   client.post("/auth/vefiyOtp", data).then((r) => r.data);
-// data: { email, otp }
+// data: { email, otp (6 digits) }
 
-export const logoutUser = () =>
-  client.post("/auth/logout").then((r) => r.data);
+export const logoutUser = () => client.post("/auth/logout").then((r) => r.data);
 
 export const changePassword = (data) =>
   client.post("/auth/change-password", data).then((r) => r.data);
@@ -28,14 +32,8 @@ export const resetPassword = (data) =>
   client.post("/auth/reset-password", data).then((r) => r.data);
 // data: { email, otp, newPassword, confirmNewPassword }
 
-export const followUser = (id) =>
-  client.post(`/auth/follow/${id}`).then((r) => r.data);
-
-export const unfollowUser = (id) =>
-  client.post(`/auth/unfollow/${id}`).then((r) => r.data);
-
-export const getFollowing = (id) =>
-  client.get(`/auth/following/${id}`).then((r) => r.data);
-
-export const getFollowers = (id) =>
-  client.get(`/auth/followers/${id}`).then((r) => r.data);
+// The backend has no "/me" endpoint. To find out whether the httpOnly cookie
+// is still valid we call the cheapest authenticated route. 200 => valid
+// session, 401 => not logged in (the client interceptor emits the event).
+export const checkSession = (config = {}) =>
+  client.get("/notifications", { params: { limit: 1 }, ...config }).then((r) => r.data);

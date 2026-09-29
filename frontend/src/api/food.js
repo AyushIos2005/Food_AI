@@ -1,23 +1,23 @@
 import client from "./client";
 
-// Maps to backend/src/routes/food.route.js -> mounted at /api/food
-// Chef-only endpoints
-export const uploadFood = (formData) =>
-  client
-    .post("/food/upload", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    })
-    .then((r) => r.data);
-// formData fields: foodImage (file), foodName, ingredients, precautions, description
+// Backend: src/routes/food.route.js, mounted at /api/food.
+// List responses:  { message, foods: Food[] }
+// Upload response: { message, food }
+// Delete response: { message }
 
-export const deleteFood = (id) =>
-  client.delete(`/food/deletefood/${id}`).then((r) => r.data);
+// Any logged-in user. Optional params: { page, limit, search }.
+export const getAllFood = (params, config = {}) =>
+  client.get("/food/get-all", { params, ...config }).then((r) => r.data);
 
-// Chef-only listing (backend: verifyChef middleware)
-export const getFoodForChef = () => client.get("/food/get").then((r) => r.data);
+// Chef-only listing (verifyAdmin => role "chef").
+export const getFoodAdmin = (params, config = {}) =>
+  client.get("/food/get", { params, ...config }).then((r) => r.data);
 
-// Any logged-in user/chef can browse all dishes
-export const getAllFood = () => client.get("/food/get-all").then((r) => r.data);
+// Chef-only. multipart/form-data. Fields: foodImage (file), foodName,
+// ingredients (comma separated string or array), precautions, description.
+// Do NOT set Content-Type manually: the browser must add the boundary.
+export const uploadFood = (formData, config = {}) =>
+  client.post("/food/upload", formData, config).then((r) => r.data);
 
-// Single dish detail (added to support the /dish/:id page)
-export const getFoodById = (id) => client.get(`/food/${id}`).then((r) => r.data);
+export const deleteFood = (id, config = {}) =>
+  client.delete(`/food/deletefood/${id}`, config).then((r) => r.data);

@@ -1,40 +1,49 @@
 import client from "./client";
 
-// Maps to backend/src/routes/blog.route.js -> mounted at /api/blog
-export const createBlog = (formData) =>
+// Backend: src/routes/blog.route.js, mounted at /api/blog.
+// List/detail responses: { success, count, data }
+//   get-all / saved / hashtag => data: Blog[]  (createdBy, likes[], savedBy[],
+//                                   shares[], comments[] are populated)
+//   get-comment               => data: Comment[]
+//   create-blog               => data: Blog
+//   addComment                => data: Comment
+// Toggle responses:
+//   like  => { liked, likeCount }
+//   share => { shared, shareCount }
+//   save  => { saved, saveCount }
+
+export const getAllBlogs = (params, config = {}) =>
+  client.get("/blog/get-all", { params, ...config }).then((r) => r.data);
+
+// multipart/form-data. Fields: description, media (1..10 files).
+export const createBlog = (formData, config = {}) =>
+  client.post("/blog/create-blog", formData, config).then((r) => r.data);
+
+export const deleteBlog = (blogId, config = {}) =>
+  client.delete("/blog/delete-blog", { data: { blogId }, ...config }).then((r) => r.data);
+
+export const addComment = (blogId, text, config = {}) =>
+  client.post("/blog/addComment", { blogId, text }, config).then((r) => r.data);
+
+export const getComments = (blogId, config = {}) =>
+  client.get("/blog/get-comment", { params: { blogId }, ...config }).then((r) => r.data);
+
+export const deleteComment = (blogId, commentId, config = {}) =>
   client
-    .post("/blog/create-blog", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    })
-    .then((r) => r.data);
-// formData fields: description, socialLinks (JSON string), media files
-
-export const deleteBlog = (blogId) =>
-  client.delete("/blog/delete-blog", { data: { blogId } }).then((r) => r.data);
-
-export const getAllBlogs = () => client.get("/blog/get-all").then((r) => r.data);
-
-export const addComment = (blogId, text) =>
-  client.post("/blog/addComment", { blogId, text }).then((r) => r.data);
-
-export const getComments = (blogId) =>
-  client.get("/blog/get-comment", { params: { blogId } }).then((r) => r.data);
-
-export const deleteComment = (blogId, commentId) =>
-  client
-    .delete("/blog/delete-comment", { data: { blogId, commentId } })
+    .delete("/blog/delete-comment", { data: { blogId, commentId }, ...config })
     .then((r) => r.data);
 
-export const toggleLike = (blogId) =>
-  client.post("/blog/like", { blogId }).then((r) => r.data);
+export const toggleLike = (blogId, config = {}) =>
+  client.post("/blog/like", { blogId }, config).then((r) => r.data);
 
-export const toggleShare = (blogId) =>
-  client.post("/blog/share", { blogId }).then((r) => r.data);
+export const toggleShare = (blogId, config = {}) =>
+  client.post("/blog/share", { blogId }, config).then((r) => r.data);
 
-export const toggleSave = (blogId) =>
-  client.post("/blog/save", { blogId }).then((r) => r.data);
+export const toggleSave = (blogId, config = {}) =>
+  client.post("/blog/save", { blogId }, config).then((r) => r.data);
 
-export const getSavedBlogs = () => client.get("/blog/saved").then((r) => r.data);
+export const getSavedBlogs = (config = {}) =>
+  client.get("/blog/saved", config).then((r) => r.data);
 
-export const getBlogsByHashtag = (hashtag) =>
-  client.get(`/blog/hashtag/${encodeURIComponent(hashtag)}`).then((r) => r.data);
+export const getBlogsByHashtag = (hashtag, config = {}) =>
+  client.get(`/blog/hashtag/${encodeURIComponent(hashtag)}`, config).then((r) => r.data);

@@ -1,15 +1,16 @@
 import client from "./client";
 
-// Maps to backend/src/routes/feedback.route.js
-// NOTE: in backend/src/app.js this router is mounted at three different
-// base paths (/api/feedback, /api/complaint, /api/contactDeveloper) but the
-// router's own sub-paths are always the same, so the real, reachable routes are:
-export const giveFeedback = (rating) =>
-  client.post("/feedback/feedback", { rating }).then((r) => r.data);
+// Backend: src/routes/feedback.route.js. The same router is mounted at
+// /api/feedback, /api/complaint and /api/contactDeveloper, but its sub-paths
+// are identical, so we always use the /api/feedback mount.
+// Responses: { message, ... }. "complain" is users-only (403 for chefs).
 
-export const submitComplaint = (complainMessage) =>
-  client.post("/feedback/complain", { complainMessage }).then((r) => r.data);
+export const giveFeedback = (rating, config = {}) =>
+  client.post("/feedback/feedback", { rating }, config).then((r) => r.data);
 
-export const contactDeveloper = (data) =>
-  client.post("/feedback/contact-developer", data).then((r) => r.data);
+export const submitComplaint = (complainMessage, config = {}) =>
+  client.post("/feedback/complain", { complainMessage }, config).then((r) => r.data);
+
+export const contactDeveloper = (data, config = {}) =>
+  client.post("/feedback/contact-developer", data, config).then((r) => r.data);
 // data: { fullname, address, contactno, email, reason }

@@ -1,110 +1,111 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { ChefHat, ChevronRight, Sparkles, Wand2 } from "lucide-react";
-import { getAiHistory, deleteAiHistoryItem } from "../api/ai";
-import { AiRecipeCard } from "../components/BlogCard";
-import { EmptyState, LoadingState } from "../components/States";
+import { useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { ChefHat, Sparkles } from "lucide-react";
+import { deleteAiHistory, getAiHistory, undoAiHistory } from "../api/ai";
+import { getErrorMessage } from "../api/client";
+import AiRecipeCard, { aiTitle } from "../components/AiRecipeCard";
+import { EmptyState, ErrorState, SkeletonList } from "../components/States";
+import { Button } from "../components/ui/Button";
 import { useToast } from "../context/ToastContext";
-
-const RECIPE_KEY = "foodai_last_recipe";
+import { asArray, useAsync } from "../hooks/useAsync";
 
 export default function AiHub() {
-  const [history, setHistory] = useState([]);
-  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
   const toast = useToast();
+  const [busyId, setBusyId] = useState(null);
+  // A recipe that was just deleted (here, or from the result page) can be undone.
+  const [undoable, setUndoable] = useState(location.state?.deleted || null);
 
-  useEffect(() => {
-    getAiHistory()
-      .then((res) => setHistory(Array.isArray(res?.data) ? res.data : []))
-      .catch(() => setHistory([]))
-      .finally(() => setLoading(false));
-  }, []);
+  // Backend: { success, count, data: HistoryDoc[] }, newest first.
+  const { data, loading, error, reload } = useAsync((signal) => getAiHistory({ signal }), []);
+  const history = asArray(data?.data);
 
-  const openRecipe = (recipe) => {
-    sessionStorage.setItem(RECIPE_KEY, JSON.stringify(recipe));
-    navigate("/ai/result");
+  const undo = async (target = undoable) => {
+    if (!target || busyId) return;
+    setBusyId(target.id);
+    try {
+      await undoAiHistory(target.id);
+      toast.success(`Restored "${target.name}"`);
+      setUndoable(null);
+      reload();
+    } catch (err) {
+      toast.error(getErrorMessage(err, "Couldn't restore it. Try again."));
+    } finally {
+      setBusyId(null);
+    }
   };
 
-  const removeItem = async (id) => {
-    const prev = history;
-    setHistory((h) => h.filter((item) => item._id !== id));
+  const remove = async (item) => {
+    if (busyId) return;
+    setBusyId(item._id);
     try {
-      await deleteAiHistoryItem(id);
-      toast?.success("Recipe removed");
+      await deleteAiHistory(item._id);
+      const target = { id: item._id, name: aiTitle(item) };
+      setUndoable(target);
+      toast.success(`Deleted "${target.name}"`, { duration: 8000, action: { label: "Undo", onClick: () => undo(target) } });
+      reload();
     } catch (err) {
-      setHistory(prev);
-      toast?.error(err.message || "Failed to remove recipe");
+      toast.error(getErrorMessage(err, "Couldn't delete the recipe. Try again."));
+    } finally {
+      setBusyId(null);
     }
   };
 
   return (
     <div>
-      <h1 className="font-display text-2xl text-ink mb-5">AI Hub</h1>
+      <section aria-labelledby="ai-hero" className="rounded-[28px] bg-gradient-to-br from-orange-700 to-orange-800 text-white p-6 sm:p-8 mb-8">
+        <h2 id="ai-hero" className="font-display text-3xl sm:text-4xl">Cook from what you already have</h2>
+        <p className="text-white/90 mt-2 max-w-lg text-[15px]">
+          Tell FOODAI your ingredients, servings and diet. Get a full recipe, tweak it with one tap, then cook it step by step.
+        </p>
+        <button
+          onClick={() => navigate("/ai/create")}
+          className="mt-6 bg-white text-orange-800 font-semibold rounded-2xl px-6 min-h-14 inline-flex items-center gap-2 hover:bg-orange-50 transition"
+        >
+          <Sparkles size={18} aria-hidden="true" /> Create with AI
+        </button>
+      </section>
 
-      <div className="rounded-[26px] bg-gradient-to-br from-emerald-500 to-emerald-700 text-white p-6 mb-5">
-        <div className="flex items-center gap-2 mb-2">
-          <Sparkles size={16} />
-          <p className="text-[12px] tracking-[0.16em] font-semibold">INGREDIENT TO RECIPE</p>
+      {undoable && (
+        <div role="status" className="card flex items-center justify-between gap-3 px-4 py-3 mb-4">
+          <p className="text-[14px] text-ink truncate">Deleted “{undoable.name}”.</p>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button variant="ghost" size="sm" onClick={() => undo()} loading={busyId === undoable.id} className="!text-orange-800">
+              Undo
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setUndoable(null)}>
+              Dismiss
+            </Button>
+          </div>
         </div>
-        <h2 className="font-display text-2xl leading-snug">
-          Enter ingredients you have and get recipe suggestions
-        </h2>
-        <button
-          onClick={() => navigate("/ai/create")}
-          className="mt-5 bg-white text-emerald-700 font-semibold rounded-2xl px-5 py-3 flex items-center gap-2"
-        >
-          <Wand2 size={16} /> Generate
-        </button>
-      </div>
+      )}
 
-      <div className="flex flex-col gap-2.5 mb-8">
-        <button
-          onClick={() => navigate("/ai/create")}
-          className="card flex items-center gap-3.5 p-4 text-left"
-        >
-          <span className="w-11 h-11 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
-            <Sparkles size={19} />
-          </span>
-          <span className="flex-1">
-            <p className="text-[14px] font-semibold text-ink">Recipe Improvement</p>
-            <p className="text-[12px] text-ink-soft">Add ingredients to make your recipe better</p>
-          </span>
-          <ChevronRight size={18} className="text-ink-soft/40" />
-        </button>
-
-        <button
-          onClick={() => navigate("/ai/create")}
-          className="card flex items-center gap-3.5 p-4 text-left"
-        >
-          <span className="w-11 h-11 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
-            <ChefHat size={19} />
-          </span>
-          <span className="flex-1">
-            <p className="text-[14px] font-semibold text-ink">Cooking Assistant</p>
-            <p className="text-[12px] text-ink-soft">Step by step cooking guidance</p>
-          </span>
-          <ChevronRight size={18} className="text-ink-soft/40" />
-        </button>
-      </div>
-
-      <h3 className="font-display text-xl mb-4">Your generated recipes</h3>
+      <h3 className="font-display text-2xl mb-4">Your AI recipes</h3>
       {loading ? (
-        <LoadingState label="Loading AI recipes..." />
+        <SkeletonList count={3} label="Loading your recipes..." />
+      ) : error ? (
+        <ErrorState message={error} onRetry={reload} />
       ) : history.length === 0 ? (
         <EmptyState
+          icon={ChefHat}
           title="No AI recipes yet"
-          description="Generate your first protein-smart recipe."
-          action={<button onClick={() => navigate("/ai/create")} className="btn-primary mt-3">Create recipe</button>}
+          description="Your first recipe is one short chat away."
+          action={
+            <Button icon={Sparkles} onClick={() => navigate("/ai/create")}>
+              Create My Recipe
+            </Button>
+          }
         />
       ) : (
-        <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid md:grid-cols-2 gap-4">
           {history.map((item) => (
             <AiRecipeCard
               key={item._id}
-              recipe={item.recipe || item}
-              onOpen={() => openRecipe(item.recipe || item)}
-              onDelete={() => removeItem(item._id)}
+              item={item}
+              deleting={busyId === item._id}
+              onOpen={() => navigate(`/ai/result/${item._id}`)}
+              onDelete={() => remove(item)}
             />
           ))}
         </div>

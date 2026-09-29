@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, ChefHat, User, AtSign, Mail, Lock } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 export default function Register() {
@@ -9,56 +9,83 @@ export default function Register() {
     username: "",
     email: "",
     password: "",
+    role: "user",
   });
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState("");
-  const { register, loading } = useAuth();
+  const [submitting, setSubmitting] = useState(false);
+  const { register } = useAuth();
   const navigate = useNavigate();
 
   const update = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
+  // Same rules as the backend's registerSchema (src/validators/schemas.js).
+  const validate = () => {
+    if (!form.name.trim()) return "Enter your name.";
+    if (!/^[a-zA-Z0-9._-]{3,40}$/.test(form.username.trim()))
+      return "Username must be 3-40 characters: letters, numbers, . _ -";
+    if (form.password.length < 6) return "Password must be at least 6 characters.";
+    return "";
+  };
+
   const submit = async (e) => {
     e.preventDefault();
+    if (submitting) return;
+    const problem = validate();
+    if (problem) return setError(problem);
     setError("");
+    setSubmitting(true);
     try {
-      await register(form);
-      navigate("/verify-otp", { state: { email: form.email } });
+      const payload = {
+        ...form,
+        name: form.name.trim(),
+        username: form.username.trim(),
+        email: form.email.trim(),
+      };
+      await register(payload);
+      navigate("/verify-otp", { state: { email: payload.email } });
     } catch (err) {
       setError(err.message);
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <div className="min-h-dvh flex flex-col bg-cream px-6 pt-14 pb-10">
-      <div className="flex items-center gap-2.5 mb-8">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center">
-          <ChefHat size={19} className="text-white" />
-        </div>
-        <span className="font-display text-lg text-ink">FoodMenu</span>
-      </div>
-
+    <div className="min-h-dvh flex flex-col bg-cream px-6 pt-16 pb-10">
       <div className="mb-6">
-        <h1 className="font-display text-[26px] text-ink">Create Account</h1>
-        <p className="text-[13px] text-ink-soft mt-1">Join FoodMenu today</p>
+        <h1 className="text-xl font-bold text-ink">Create your account</h1>
+        <p className="text-[13px] text-ink-soft/70 mt-1">
+          Join our food community
+        </p>
       </div>
 
       <form onSubmit={submit} className="flex flex-col gap-3">
+        <input
+          className="input-field"
+          placeholder="Full Name"
+          value={form.name}
+          onChange={update("name")}
+          required
+        />
+        <input
+          className="input-field"
+          placeholder="Username"
+          value={form.username}
+          onChange={update("username")}
+          required
+        />
+        <input
+          className="input-field"
+          placeholder="Email"
+          type="email"
+          value={form.email}
+          onChange={update("email")}
+          required
+        />
         <div className="relative">
-          <User size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-soft/50" />
-          <input className="input-field pl-11" placeholder="Full Name" value={form.name} onChange={update("name")} required />
-        </div>
-        <div className="relative">
-          <AtSign size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-soft/50" />
-          <input className="input-field pl-11" placeholder="Username" value={form.username} onChange={update("username")} required />
-        </div>
-        <div className="relative">
-          <Mail size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-soft/50" />
-          <input className="input-field pl-11" placeholder="Email Address" type="email" value={form.email} onChange={update("email")} required />
-        </div>
-        <div className="relative">
-          <Lock size={17} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-soft/50" />
           <input
-            className="input-field pl-11 pr-10"
+            className="input-field pr-10"
             placeholder="Password"
             type={showPw ? "text" : "password"}
             value={form.password}
@@ -75,31 +102,34 @@ export default function Register() {
           </button>
         </div>
 
+        <div className="flex gap-2">
+          {[
+            { v: "user", label: "Food Lover" },
+            { v: "chef", label: "Chef" },
+          ].map((opt) => (
+            <button
+              type="button"
+              key={opt.v}
+              onClick={() => setForm((f) => ({ ...f, role: opt.v }))}
+              className={`flex-1 py-2.5 rounded-2xl text-[13px] font-medium border ${
+                form.role === opt.v
+                  ? "bg-orange-500 text-white border-orange-500"
+                  : "bg-white text-ink-soft border-(--color-line)"
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
         {error && <p className="text-[12px] text-red-500">{error}</p>}
 
-        <button className="btn-primary mt-2" disabled={loading}>
-          {loading ? "Creating account..." : "Register"}
+        <button className="btn-primary mt-2" disabled={submitting}>
+          {submitting ? "Creating account..." : "Register"}
         </button>
       </form>
 
-      <div className="flex items-center gap-3 my-6">
-        <div className="h-px bg-(--color-line) flex-1" />
-        <span className="text-[11px] text-ink-soft/50">or continue with</span>
-        <div className="h-px bg-(--color-line) flex-1" />
-      </div>
-
-      <div className="flex items-center justify-center gap-4">
-        {["G", "", "f"].map((l, i) => (
-          <div
-            key={i}
-            className="w-11 h-11 rounded-full border border-(--color-line) bg-white flex items-center justify-center text-sm font-semibold text-ink-soft"
-          >
-            {l}
-          </div>
-        ))}
-      </div>
-
-      <p className="text-center text-[13px] text-ink-soft mt-auto pt-8">
+      <p className="text-center text-[13px] text-ink-soft/70 mt-auto pt-8">
         Already have an account?{" "}
         <Link to="/login" className="text-orange-600 font-semibold">
           Login

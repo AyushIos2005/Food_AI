@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { KeyRound } from "lucide-react";
 import { forgetPassword, resetPassword } from "../api/auth";
 
 export default function ForgotPassword() {
@@ -15,6 +14,7 @@ export default function ForgotPassword() {
 
   const requestOtp = async (e) => {
     e.preventDefault();
+    if (loading) return;
     setStatus({ error: "", success: "" });
     setLoading(true);
     try {
@@ -30,6 +30,13 @@ export default function ForgotPassword() {
 
   const doReset = async (e) => {
     e.preventDefault();
+    if (loading) return;
+    if (newPassword.length < 6) {
+      return setStatus({ error: "Password must be at least 6 characters.", success: "" });
+    }
+    if (newPassword !== confirmNewPassword) {
+      return setStatus({ error: "Passwords do not match.", success: "" });
+    }
     setStatus({ error: "", success: "" });
     setLoading(true);
     try {
@@ -45,17 +52,12 @@ export default function ForgotPassword() {
 
   return (
     <div className="min-h-dvh flex flex-col bg-cream px-6 pt-16 pb-10">
-      <div className="flex flex-col items-center text-center mb-8">
-        <div className="w-16 h-16 rounded-3xl bg-orange-50 flex items-center justify-center mb-4">
-          <KeyRound size={28} className="text-orange-500" />
-        </div>
-        <h1 className="font-display text-xl text-ink">Reset Password</h1>
-        <p className="text-[13px] text-ink-soft mt-1 max-w-[260px]">
-          {stage === "request"
-            ? "Enter your email to receive a reset OTP."
-            : "Enter the OTP and your new password."}
-        </p>
-      </div>
+      <h1 className="text-xl font-bold text-ink mb-2">Reset password</h1>
+      <p className="text-[13px] text-ink-soft/70 mb-8">
+        {stage === "request"
+          ? "Enter your email to receive a reset OTP."
+          : "Enter the OTP and your new password."}
+      </p>
 
       {stage === "request" ? (
         <form onSubmit={requestOtp} className="flex flex-col gap-3">
