@@ -1,10 +1,10 @@
 import api from "./axios";
 
 // Backend schema accepts { rating } only.
-export const sendFeedback = (payload) => api.post("/api/feedback/feedback", payload);
+export const sendFeedback = (payload) => api.post("/feedback/feedback", payload);
 
 // Users only (route uses verifyUser) — chefs get 403.
-export const sendComplaint = (payload) => api.post("/api/complaint/complain", payload);
+export const sendComplaint = (payload) => api.post("/complaint/complain", payload);
 
 // { fullname, address, contactno, email, reason }
-export const contactDeveloper = (payload) => api.post("/api/contactDeveloper/contact-developer", payload);
+export const contactDeveloper = (payload) => api.post("/contactDeveloper/contact-developer", payload);

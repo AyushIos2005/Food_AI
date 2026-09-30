@@ -1,23 +1,4 @@
-import axios from "axios";
-
-// Backend base URL — override with VITE_API_URL in a .env file if needed.
-const BASE_URL = "https://food-ai-1-333t.onrender.com";
-
-const api = axios.create({
-  baseURL: BASE_URL,
-  withCredentials: true, // JWT lives in an httpOnly cookie
-});
-
-// Broadcast expired/invalid sessions so AuthContext can clear local state
-// and routes can bounce to /login, without the api layer needing React.
-api.interceptors.response.use(
-  (res) => res,
-  (err) => {
-    if (err?.response?.status === 401) {
-      window.dispatchEvent(new CustomEvent("foodai:unauthorized"));
-    }
-    return Promise.reject(err);
-  }
-);
-
-export default api;
+// Legacy entry point kept so older imports keep working.
+// There is ONE Axios client: ./client.js (baseURL = VITE_API_URL, which
+// already includes "/api"). Request paths must NOT start with "/api".
+export { default } from "./client";

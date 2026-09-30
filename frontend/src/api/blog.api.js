@@ -1,22 +1,20 @@
 import api from "./axios";
 
 export const createBlog = (formData) =>
-  api.post("/api/blog/create-blog", formData, {
-    headers: { "Content-Type": "multipart/form-data" },
-  });
+  api.post("/blog/create-blog", formData);
 
 export const deleteBlog = (blogId) =>
-  api.delete("/api/blog/delete-blog", { data: { blogId } });
+  api.delete("/blog/delete-blog", { data: { blogId } });
 
-export const getAllBlogs = () => api.get("/api/blog/get-all");
+export const getAllBlogs = () => api.get("/blog/get-all");
 
-export const addComment = (payload) => api.post("/api/blog/addComment", payload);
-export const getComments = (blogId) => api.get("/api/blog/get-comment", { params: { blogId } });
+export const addComment = (payload) => api.post("/blog/addComment", payload);
+export const getComments = (blogId) => api.get("/blog/get-comment", { params: { blogId } });
 export const deleteComment = (payload) =>
-  api.delete("/api/blog/delete-comment", { data: payload });
+  api.delete("/blog/delete-comment", { data: payload });
 
-export const likeBlog = (blogId) => api.post("/api/blog/like", { blogId });
-export const shareBlog = (blogId) => api.post("/api/blog/share", { blogId });
-export const saveBlog = (blogId) => api.post("/api/blog/save", { blogId });
-export const getSavedBlogs = () => api.get("/api/blog/saved");
-export const getBlogsByHashtag = (hashtag) => api.get(`/api/blog/hashtag/${hashtag}`);
+export const likeBlog = (blogId) => api.post("/blog/like", { blogId });
+export const shareBlog = (blogId) => api.post("/blog/share", { blogId });
+export const saveBlog = (blogId) => api.post("/blog/save", { blogId });
+export const getSavedBlogs = () => api.get("/blog/saved");
+export const getBlogsByHashtag = (hashtag) => api.get(`/blog/hashtag/${hashtag}`);

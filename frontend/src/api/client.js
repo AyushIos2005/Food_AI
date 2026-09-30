@@ -12,7 +12,10 @@ export const API_URL = (
 ).replace(/\/+$/, "");
 
 // Socket.IO lives on the same HTTP server, at the origin (no /api).
-export const SOCKET_URL = API_URL.replace(/\/api$/, "");
+// VITE_SOCKET_URL wins; otherwise derive it from VITE_API_URL.
+export const SOCKET_URL = (
+  import.meta.env.VITE_SOCKET_URL || API_URL.replace(/\/api$/, "")
+).replace(/\/+$/, "");
 
 // Broadcast when the backend says the session cookie is missing/expired.
 // AuthContext listens for this, clears local auth state, and the route guards
@@ -32,6 +35,7 @@ export const FRIENDLY = {
   network: "Can't reach FOODAI right now. Check your connection and try again.",
   timeout: "That's taking longer than expected. Please try again.",
   server: "Something went wrong on our side. Please try again in a moment.",
+  rateLimit: "Too many requests. Please wait a moment and try again.",
   generic: "Something went wrong. Please try again.",
 };
 
@@ -69,6 +73,8 @@ client.interceptors.response.use(
       message = FRIENDLY.timeout;
     } else if (!err?.response) {
       message = FRIENDLY.network;
+    } else if (status === 429) {
+      message = FRIENDLY.rateLimit;
     } else if (status >= 500 || typeof message !== "string" || !message.trim()) {
       message = status >= 500 ? FRIENDLY.server : FRIENDLY.generic;
     }

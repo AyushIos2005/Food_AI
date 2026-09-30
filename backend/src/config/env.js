@@ -12,7 +12,7 @@ const env = {
     MON_URI: firstDefined(process.env.MON_URI, process.env.MONGO_URI),
     JWT_KEY: process.env.JWT_KEY,
     JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "1d",
-    CLIENT_URL: "https://food-ai-frontend.onrender.com",
+    CLIENT_URL: process.env.CLIENT_URL || "http://localhost:5173",
     COOKIE_SAMESITE: process.env.COOKIE_SAMESITE || (process.env.NODE_ENV === "production" ? "strict" : "lax"),
     TRUST_PROXY: process.env.TRUST_PROXY === "true",
     IMAGE_PRIVATE_KEY: firstDefined(process.env.IMAGE_PRIVATE_KEY, process.env.IMG_PRIVATE_KEY),

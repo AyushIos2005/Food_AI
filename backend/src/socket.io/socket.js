@@ -25,9 +25,14 @@ function getCookieValue(cookieHeader, name) {
 }
 
 function initSocket(server) {
+    const allowedOrigins = env.CLIENT_URL
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter(Boolean);
+
     io = new Server(server, {
         cors: {
-            origin: process.env.FRONTEND_URL,
+            origin: allowedOrigins,
             credentials: true,
         },
     });

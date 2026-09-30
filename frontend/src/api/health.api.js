@@ -1,3 +1,5 @@
-import api from "./axios";
+import client, { SOCKET_URL } from "./client";
 
-export const getHealth = () => api.get("/health");
+// Backend: GET /health (mounted at the server root, NOT under /api).
+// An absolute URL overrides the client's /api baseURL.
+export const getHealth = () => client.get(`${SOCKET_URL}/health`);
