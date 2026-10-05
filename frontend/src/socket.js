@@ -9,7 +9,7 @@ let socket = null;
 
 export function connectSocket() {
   if (socket) return socket; // never open a second connection
-  socket = io(SOCKET_URL, {
+  socket = io("https://backend-64ey.onrender.com", {
     withCredentials: true,
     transports: ["websocket", "polling"],
     reconnection: true,
