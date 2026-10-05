@@ -48,7 +48,9 @@ app.use(express.urlencoded({ extended: true, limit: env.BODY_LIMIT }));
 app.use(cookieParser());
 app.use(sanitizeRequest);
 app.use("/api", apiLimiter);
-
+app.get("/",(req,res) => {
+    res.send("API Working properly")
+})
 app.get("/health", (req, res) => {
     const database = isDbConnected() ? "connected" : "disconnected";
     const ok = database === "connected";
