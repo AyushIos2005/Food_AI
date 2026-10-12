@@ -1,29 +1,29 @@
 import { io } from "socket.io-client";
-import { SOCKET_URL } from "./api/client";
 
-// One shared Socket.IO connection for the whole app.
-// SOCKET_URL comes from VITE_SOCKET_URL (falls back to VITE_API_URL sans /api).
-// Auth is the same httpOnly "token" cookie used by the REST API, so we only
-// need withCredentials. The backend never trusts a user id from the client.
+// Socket.IO connects to the server ROOT (not /api).
+// Set VITE_SOCKET_URL=https://your-backend.onrender.com in production.
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL ||
+  (import.meta.env.VITE_API_URL || "https://backend-64ey.onrender.com").replace(/\/api\/?$/, "");
+
 let socket = null;
 
 export function connectSocket() {
-  if (socket) return socket; // never open a second connection
-  socket = io("https://backend-64ey.onrender.com", {
-    withCredentials: true,
+  if (socket) return socket;
+  socket = io(SOCKET_URL, {
+    withCredentials: true, // sends the httpOnly "token" cookie in the handshake
     transports: ["websocket", "polling"],
-    reconnection: true,
+    reconnectionAttempts: 10,
+    reconnectionDelay: 1000,
+    reconnectionDelayMax: 10000,
   });
-  return socket;
-}
-
-export function getSocket() {
+  socket.on("connect_error", (err) => console.warn("Socket error:", err.message));
   return socket;
 }
 
 export function disconnectSocket() {
-  if (!socket) return;
-  socket.removeAllListeners();
-  socket.disconnect();
-  socket = null;
+  if (socket) {
+    socket.disconnect();
+    socket = null;
+  }
 }
