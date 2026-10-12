@@ -104,4 +104,24 @@ async function markAllAsRead(req, res, next) {
   }
 }
 
-module.exports = {getNotifications,markAsRead,markAllAsRead};
+async function deleteNotification(req, res, next) {
+  try {
+    const deleted = await Notification.findOneAndDelete({
+      _id: req.params.id,
+      recipient: req.user._id,
+    });
+
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        message: "Notification not found",
+      });
+    }
+
+    res.status(200).json({ success: true, message: "Notification deleted" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+module.exports = { getNotifications, markAsRead, markAllAsRead, deleteNotification };

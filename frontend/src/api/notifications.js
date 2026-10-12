@@ -1,21 +1,20 @@
 import client from "./client";
 
-// Backend: src/routes/notification.route.js, mounted at /api/notifications.
-//
-// GET   /            => { success, data: Notification[], unreadCount,
-//                         pagination: { page, limit, hasMore } }
-// PATCH /:id/read    => { success, data: Notification }
-// PATCH /read-all    => { success, message }
-//
-// Notification = { _id, recipient, sender, type, title, message, entityId,
-//                  entityType, isRead, createdAt }
-// type: LIKE | COMMENT | FOLLOW | RECIPE | BLOG | SYSTEM | SHARE | SAVE
+// Backend (notification.controller.js) returns { success, data: [...], unreadCount, pagination }
+// with `isRead`. The UI expects { notifications: [...] } with `read`, so normalise here.
+const normalize = (n) => ({ ...n, read: n.isRead ?? n.read ?? false });
 
-export const getNotifications = (params, config = {}) =>
-  client.get("/notifications", { params, ...config }).then((r) => r.data);
+export const getNotifications = (params) =>
+  client.get("/notifications", { params }).then((r) => ({
+    ...r.data,
+    notifications: (r.data.data || r.data.notifications || []).map(normalize),
+  }));
 
-export const markNotificationRead = (id, config = {}) =>
-  client.patch(`/notifications/${id}/read`, null, config).then((r) => r.data);
+export const markNotificationRead = (id) =>
+  client.patch(`/notifications/${id}/read`).then((r) => r.data);
 
-export const markAllNotificationsRead = (config = {}) =>
-  client.patch("/notifications/read-all", null, config).then((r) => r.data);
+export const markAllNotificationsRead = () =>
+  client.patch("/notifications/read-all").then((r) => r.data);
+
+export const deleteNotification = (id) =>
+  client.delete(`/notifications/${id}`).then((r) => r.data);

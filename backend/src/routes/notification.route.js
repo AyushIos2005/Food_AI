@@ -28,4 +28,10 @@ router.patch(
   notificationController.markAllAsRead
 );
 
+router.delete(
+  "/:id",
+  authMiddleware.verifyToken,
+  notificationController.deleteNotification
+);
+
 module.exports = router;
