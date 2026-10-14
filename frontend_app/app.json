@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "FoodAI",
+    "slug": "foodai",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "foodai",
+    "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FFF8EE"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.yourcompany.foodai"
+    },
+    "android": {
+      "package": "com.yourcompany.foodai",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFF8EE"
+      },
+      "edgeToEdgeEnabled": true,
+      "permissions": ["android.permission.INTERNET"],
+      "softwareKeyboardLayoutMode": "pan"
+    },
+    "plugins": ["expo-router", "expo-secure-store", "expo-font"],
+    "experiments": { "typedRoutes": false },
+    "extra": { "router": {}, "eas": { "projectId": "REPLACE_WITH_EAS_PROJECT_ID" } }
+  }
+}
